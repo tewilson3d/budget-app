@@ -170,11 +170,11 @@ type createTransactionRequest struct {
 }
 
 type summaryResponse struct {
-	Month          string                     `json:"month"`
-	TotalIncome    float64                    `json:"total_income"`
-	TotalExpenses  float64                    `json:"total_expenses"`
-	Balance        float64                    `json:"balance"`
-	ByCategory     []categoryBreakdownEntry   `json:"by_category"`
+	Month         string                   `json:"month"`
+	TotalIncome   float64                  `json:"total_income"`
+	TotalExpenses float64                  `json:"total_expenses"`
+	Balance       float64                  `json:"balance"`
+	ByCategory    []categoryBreakdownEntry `json:"by_category"`
 }
 
 type categoryBreakdownEntry struct {

@@ -1,267 +1,300 @@
-(function() {
+(() => {
   'use strict';
 
-  const CATEGORIES = {
-    expense: [
-      { name: 'Food', emoji: '🍔', color: '#f97316' },
-      { name: 'Transport', emoji: '🚗', color: '#3b82f6' },
-      { name: 'Housing', emoji: '🏠', color: '#8b5cf6' },
-      { name: 'Utilities', emoji: '⚡', color: '#eab308' },
-      { name: 'Entertainment', emoji: '🎬', color: '#ec4899' },
-      { name: 'Shopping', emoji: '🛍️', color: '#14b8a6' },
-      { name: 'Health', emoji: '🏥', color: '#ef4444' },
-      { name: 'Education', emoji: '📚', color: '#6366f1' },
-      { name: 'Other', emoji: '📦', color: '#6b7280' },
-    ],
-    income: [
-      { name: 'Salary', emoji: '💵', color: '#16a34a' },
-      { name: 'Freelance', emoji: '💻', color: '#0891b2' },
-      { name: 'Investment', emoji: '📈', color: '#7c3aed' },
-      { name: 'Gift', emoji: '🎁', color: '#e11d48' },
-      { name: 'Other', emoji: '📦', color: '#6b7280' },
-    ],
+  const CATEGORY_COLORS = {
+    Income: 'var(--cat-income)',
+    Food: 'var(--cat-food)',
+    Transport: 'var(--cat-transport)',
+    Housing: 'var(--cat-housing)',
+    Utilities: 'var(--cat-utilities)',
+    Entertainment: 'var(--cat-entertainment)',
+    Shopping: 'var(--cat-shopping)',
+    Health: 'var(--cat-health)',
+    Education: 'var(--cat-education)',
+    Other: 'var(--cat-other)',
   };
 
-  const ALL_CATEGORIES = [...CATEGORIES.expense, ...CATEGORIES.income];
-
-  function getCatInfo(name) {
-    return ALL_CATEGORIES.find(c => c.name === name) || { name, emoji: '📦', color: '#6b7280' };
+  function currentMonthString() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   }
 
-  let currentDate = new Date();
-  let currentType = 'expense';
+  const state = {
+    month: currentMonthString(),
+    type: 'expense',
+  };
 
-  // Elements
-  const monthLabel = document.getElementById('currentMonth');
-  const prevBtn = document.getElementById('prevMonth');
-  const nextBtn = document.getElementById('nextMonth');
-  const form = document.getElementById('addForm');
-  const amountInput = document.getElementById('amount');
-  const categorySelect = document.getElementById('category');
-  const descInput = document.getElementById('description');
-  const dateInput = document.getElementById('date');
-  const submitBtn = document.getElementById('submitBtn');
-  const totalIncome = document.getElementById('totalIncome');
-  const totalExpenses = document.getElementById('totalExpenses');
-  const totalBalance = document.getElementById('totalBalance');
-  const categoryBars = document.getElementById('categoryBars');
-  const transactionsList = document.getElementById('transactionsList');
-  const categorySection = document.getElementById('categorySection');
-  const toastEl = document.getElementById('toast');
+  const els = {
+    currentMonth: document.getElementById('current-month'),
+    prevMonth: document.getElementById('prev-month'),
+    nextMonth: document.getElementById('next-month'),
+    form: document.getElementById('add-form'),
+    amount: document.getElementById('amount'),
+    category: document.getElementById('category'),
+    description: document.getElementById('description'),
+    date: document.getElementById('date'),
+    toggleExpense: document.getElementById('toggle-expense'),
+    toggleIncome: document.getElementById('toggle-income'),
+    summaryIncome: document.getElementById('summary-income'),
+    summaryExpenses: document.getElementById('summary-expenses'),
+    summaryBalance: document.getElementById('summary-balance'),
+    categoryBreakdown: document.getElementById('category-breakdown'),
+    transactionsList: document.getElementById('transactions-list'),
+    rowTemplate: document.getElementById('transaction-row-template'),
+    authStatus: document.getElementById('auth-status'),
+  };
 
-  function getMonthStr(d) {
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  function todayString() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   }
 
-  function formatMonth(d) {
-    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  function formatMonthLabel(monthStr) {
+    const [y, m] = monthStr.split('-').map(Number);
+    const d = new Date(y, m - 1, 1);
+    return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   }
 
-  function formatMoney(n) {
-    return '$' + Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  function shiftMonth(monthStr, delta) {
+    const [y, m] = monthStr.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   }
 
-  function formatDate(dateStr) {
-    const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  function formatCurrency(value) {
+    const sign = value < 0 ? '-' : '';
+    return `${sign}$${Math.abs(value).toFixed(2)}`;
   }
 
-  function toast(msg) {
-    toastEl.textContent = msg;
-    toastEl.classList.add('show');
-    setTimeout(() => toastEl.classList.remove('show'), 2500);
-  }
-
-  function populateCategories() {
-    const cats = CATEGORIES[currentType];
-    categorySelect.innerHTML = '<option value="">Select...</option>';
-    cats.forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c.name;
-      opt.textContent = c.emoji + ' ' + c.name;
-      categorySelect.appendChild(opt);
+  function formatDateHeading(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    return date.toLocaleDateString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
     });
   }
 
-  function updateMonthDisplay() {
-    monthLabel.textContent = formatMonth(currentDate);
+  async function apiFetch(url, options) {
+    const resp = await fetch(url, options);
+    if (resp.status === 401) {
+      setUnauthenticated();
+      throw new Error('unauthenticated');
+    }
+    if (!resp.ok) {
+      let message = `Request failed (${resp.status})`;
+      try {
+        const body = await resp.json();
+        if (body && body.error) message = body.error;
+      } catch (e) {
+        // ignore
+      }
+      throw new Error(message);
+    }
+    if (resp.status === 204) return null;
+    return resp.json();
+  }
+
+  function setUnauthenticated() {
+    els.authStatus.textContent = 'Not signed in';
   }
 
   function setType(type) {
-    currentType = type;
-    document.querySelectorAll('.type-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.type === type);
-    });
-    submitBtn.textContent = 'Add ' + (type === 'income' ? 'Income' : 'Expense');
-    submitBtn.className = 'submit-btn ' + type;
-    populateCategories();
-  }
-
-  async function fetchJSON(url, opts) {
-    const res = await fetch(url, opts);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || 'Request failed');
-    }
-    return res.json();
-  }
-
-  async function loadData() {
-    const month = getMonthStr(currentDate);
-    try {
-      const [transactions, summary] = await Promise.all([
-        fetchJSON('/api/transactions?month=' + month),
-        fetchJSON('/api/summary?month=' + month),
-      ]);
-      renderSummary(summary);
-      renderCategoryBars(summary.categories || []);
-      renderTransactions(transactions || []);
-    } catch (err) {
-      console.error('Load error:', err);
-      toast('Failed to load data');
+    state.type = type;
+    els.toggleExpense.classList.toggle('active', type === 'expense');
+    els.toggleIncome.classList.toggle('active', type === 'income');
+    if (type === 'income') {
+      els.category.value = 'Income';
+    } else if (els.category.value === 'Income') {
+      els.category.value = 'Food';
     }
   }
 
-  function renderSummary(s) {
-    totalIncome.textContent = formatMoney(s.income);
-    totalExpenses.textContent = formatMoney(s.expenses);
-    totalBalance.textContent = (s.balance < 0 ? '-' : '') + formatMoney(s.balance);
-    totalBalance.className = 'card-value' + (s.balance < 0 ? ' negative' : '');
+  function renderMonth() {
+    els.currentMonth.textContent = formatMonthLabel(state.month);
   }
 
-  function renderCategoryBars(categories) {
-    // Only show expense categories (negative totals)
-    const expenses = categories.filter(c => c.total < 0).map(c => ({ ...c, total: Math.abs(c.total) }));
-    if (expenses.length === 0) {
-      categorySection.style.display = 'none';
-      return;
-    }
-    categorySection.style.display = '';
-    const max = Math.max(...expenses.map(c => c.total));
-    categoryBars.innerHTML = expenses.map(c => {
-      const info = getCatInfo(c.category);
-      const pct = max > 0 ? (c.total / max * 100) : 0;
-      return `<div class="cat-row">
-        <span class="cat-emoji">${info.emoji}</span>
-        <span class="cat-name">${c.category}</span>
-        <div class="cat-bar-wrap">
-          <div class="cat-bar" style="width:${pct}%;background:${info.color}"></div>
-        </div>
-        <span class="cat-amount">${formatMoney(c.total)}</span>
-      </div>`;
-    }).join('');
-  }
+  function renderSummary(summary) {
+    els.summaryIncome.textContent = formatCurrency(summary.total_income);
+    els.summaryExpenses.textContent = formatCurrency(summary.total_expenses);
+    els.summaryBalance.textContent = formatCurrency(summary.balance);
 
-  function renderTransactions(txns) {
-    if (txns.length === 0) {
-      transactionsList.innerHTML = `<div class="empty-state">
-        <div class="empty-icon">💭</div>
-        <p>No transactions this month</p>
-      </div>`;
+    const container = els.categoryBreakdown;
+    container.innerHTML = '';
+
+    const expenseCategories = (summary.by_category || [])
+      .filter((c) => c.total < 0)
+      .map((c) => ({ category: c.category, total: Math.abs(c.total) }))
+      .sort((a, b) => b.total - a.total);
+
+    if (expenseCategories.length === 0) {
+      container.innerHTML = '<p class="empty-state">No spending yet this month.</p>';
       return;
     }
 
-    // Group by date
-    const groups = {};
-    txns.forEach(t => {
-      if (!groups[t.date]) groups[t.date] = [];
-      groups[t.date].push(t);
-    });
+    const maxTotal = Math.max(...expenseCategories.map((c) => c.total));
 
-    let html = '';
-    Object.keys(groups).sort().reverse().forEach(date => {
-      html += `<div class="date-group">
-        <div class="date-header">${formatDate(date)}</div>`;
-      groups[date].forEach(t => {
-        const info = getCatInfo(t.category);
-        const isPositive = t.amount >= 0;
-        html += `<div class="txn-item">
-          <span class="txn-emoji">${info.emoji}</span>
-          <div class="txn-details">
-            <div class="txn-category">${t.category}</div>
-            ${t.description ? `<div class="txn-desc">${escapeHTML(t.description)}</div>` : ''}
-          </div>
-          <span class="txn-amount ${isPositive ? 'positive' : 'negative'}">
-            ${isPositive ? '+' : '-'}${formatMoney(t.amount)}
-          </span>
-          <button class="txn-delete" data-id="${t.id}" title="Delete">✕</button>
-        </div>`;
-      });
-      html += '</div>';
-    });
-    transactionsList.innerHTML = html;
+    for (const entry of expenseCategories) {
+      const row = document.createElement('div');
+      row.className = 'category-bar-row';
 
-    // Attach delete handlers
-    transactionsList.querySelectorAll('.txn-delete').forEach(btn => {
-      btn.addEventListener('click', () => deleteTransaction(btn.dataset.id));
-    });
-  }
+      const label = document.createElement('div');
+      label.className = 'category-bar-label';
+      label.textContent = entry.category;
 
-  function escapeHTML(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
+      const track = document.createElement('div');
+      track.className = 'category-bar-track';
+      const fill = document.createElement('div');
+      fill.className = 'category-bar-fill';
+      const pct = maxTotal > 0 ? (entry.total / maxTotal) * 100 : 0;
+      fill.style.width = `${pct}%`;
+      fill.style.background = CATEGORY_COLORS[entry.category] || CATEGORY_COLORS.Other;
+      track.appendChild(fill);
 
-  async function addTransaction(e) {
-    e.preventDefault();
-    const amount = parseFloat(amountInput.value);
-    if (!amount || amount <= 0) { toast('Enter a valid amount'); return; }
-    if (!categorySelect.value) { toast('Select a category'); return; }
-    if (!dateInput.value) { toast('Select a date'); return; }
+      const value = document.createElement('div');
+      value.className = 'category-bar-value';
+      value.textContent = formatCurrency(entry.total);
 
-    try {
-      await fetchJSON('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: amount,
-          category: categorySelect.value,
-          description: descInput.value.trim(),
-          date: dateInput.value,
-          type: currentType,
-        }),
-      });
-      toast((currentType === 'income' ? 'Income' : 'Expense') + ' added!');
-      amountInput.value = '';
-      descInput.value = '';
-      categorySelect.value = '';
-      loadData();
-    } catch (err) {
-      toast('Error: ' + err.message);
+      row.appendChild(label);
+      row.appendChild(track);
+      row.appendChild(value);
+      container.appendChild(row);
     }
+  }
+
+  function renderTransactions(transactions) {
+    const container = els.transactionsList;
+    container.innerHTML = '';
+
+    if (!transactions || transactions.length === 0) {
+      container.innerHTML = '<p class="empty-state">No transactions yet this month.</p>';
+      return;
+    }
+
+    const groups = new Map();
+    for (const t of transactions) {
+      if (!groups.has(t.date)) groups.set(t.date, []);
+      groups.get(t.date).push(t);
+    }
+
+    const sortedDates = Array.from(groups.keys()).sort((a, b) => (a < b ? 1 : -1));
+
+    for (const date of sortedDates) {
+      const groupEl = document.createElement('div');
+      groupEl.className = 'transaction-date-group';
+
+      const heading = document.createElement('div');
+      heading.className = 'transaction-date-heading';
+      heading.textContent = formatDateHeading(date);
+      groupEl.appendChild(heading);
+
+      for (const t of groups.get(date)) {
+        groupEl.appendChild(buildTransactionRow(t));
+      }
+
+      container.appendChild(groupEl);
+    }
+  }
+
+  function buildTransactionRow(t) {
+    const fragment = els.rowTemplate.content.cloneNode(true);
+    const row = fragment.querySelector('.transaction-row');
+    const dot = fragment.querySelector('.transaction-category-dot');
+    const desc = fragment.querySelector('.transaction-description');
+    const cat = fragment.querySelector('.transaction-category');
+    const amount = fragment.querySelector('.transaction-amount');
+    const deleteBtn = fragment.querySelector('.delete-btn');
+
+    dot.style.background = CATEGORY_COLORS[t.category] || CATEGORY_COLORS.Other;
+    desc.textContent = t.description || t.category;
+    cat.textContent = t.category;
+    amount.textContent = (t.amount >= 0 ? '+' : '') + formatCurrency(t.amount);
+    amount.classList.add(t.amount >= 0 ? 'positive' : 'negative');
+
+    deleteBtn.addEventListener('click', () => deleteTransaction(t.id));
+
+    row.dataset.id = t.id;
+    return row;
   }
 
   async function deleteTransaction(id) {
     if (!confirm('Delete this transaction?')) return;
     try {
-      await fetchJSON('/api/transactions/' + id, { method: 'DELETE' });
-      toast('Transaction deleted');
-      loadData();
+      await apiFetch(`/api/transactions/${id}`, { method: 'DELETE' });
+      await refresh();
     } catch (err) {
-      toast('Error: ' + err.message);
+      alert(err.message);
     }
   }
 
-  // Init
-  dateInput.value = new Date().toISOString().split('T')[0];
-  setType('expense');
-  updateMonthDisplay();
-  loadData();
+  async function refresh() {
+    renderMonth();
+    try {
+      const [txData, summaryData] = await Promise.all([
+        apiFetch(`/api/transactions?month=${encodeURIComponent(state.month)}`),
+        apiFetch(`/api/summary?month=${encodeURIComponent(state.month)}`),
+      ]);
+      renderTransactions(txData.transactions);
+      renderSummary(summaryData);
+    } catch (err) {
+      if (err.message !== 'unauthenticated') {
+        console.error(err);
+      }
+    }
+  }
 
-  // Events
-  form.addEventListener('submit', addTransaction);
-  document.querySelectorAll('.type-btn').forEach(btn => {
-    btn.addEventListener('click', () => setType(btn.dataset.type));
-  });
-  prevBtn.addEventListener('click', () => {
-    currentDate.setMonth(currentDate.getMonth() - 1);
-    updateMonthDisplay();
-    loadData();
-  });
-  nextBtn.addEventListener('click', () => {
-    currentDate.setMonth(currentDate.getMonth() + 1);
-    updateMonthDisplay();
-    loadData();
-  });
+  async function handleSubmit(evt) {
+    evt.preventDefault();
+
+    const rawAmount = parseFloat(els.amount.value);
+    if (isNaN(rawAmount) || rawAmount <= 0) {
+      alert('Please enter a valid amount.');
+      return;
+    }
+    const amount = state.type === 'income' ? Math.abs(rawAmount) : -Math.abs(rawAmount);
+
+    const payload = {
+      amount,
+      category: els.category.value,
+      description: els.description.value.trim(),
+      date: els.date.value,
+    };
+
+    try {
+      await apiFetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      els.amount.value = '';
+      els.description.value = '';
+      await refresh();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  function init() {
+    els.date.value = todayString();
+    setType('expense');
+
+    els.toggleExpense.addEventListener('click', () => setType('expense'));
+    els.toggleIncome.addEventListener('click', () => setType('income'));
+
+    els.prevMonth.addEventListener('click', () => {
+      state.month = shiftMonth(state.month, -1);
+      refresh();
+    });
+    els.nextMonth.addEventListener('click', () => {
+      state.month = shiftMonth(state.month, 1);
+      refresh();
+    });
+
+    els.form.addEventListener('submit', handleSubmit);
+
+    refresh();
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
 })();

@@ -1,111 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Money Tracker</title>
-<link rel="stylesheet" href="/static/style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>SpendSnap</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<div class="app">
 
-  <header class="topbar">
-    <div class="brand">
-      <span class="brand-icon">💰</span>
-      <span class="brand-name">Money Tracker</span>
+  <!-- ===== MAIN SCREEN: Quick Entry ===== -->
+  <div class="screen active" id="screen-entry">
+    <header class="top-bar">
+      <button class="icon-btn" id="btn-history" aria-label="History">📋</button>
+      <div class="top-date" id="top-date"></div>
+      <button class="icon-btn" id="btn-today-total" aria-label="Today total">
+        <span id="today-total-badge">$0</span>
+      </button>
+    </header>
+
+    <div class="amount-display">
+      <span class="currency">$</span><span id="amount-value" class="amount-num">0</span>
     </div>
-    <div id="auth-status" class="auth-status"></div>
-  </header>
 
-  <main class="content">
-
-    <section class="month-nav">
-      <button id="prev-month" class="icon-btn" aria-label="Previous month">&#8249;</button>
-      <div id="current-month" class="current-month">Loading&hellip;</div>
-      <button id="next-month" class="icon-btn" aria-label="Next month">&#8250;</button>
-    </section>
-
-    <section class="card add-form-card">
-      <form id="add-form" class="add-form">
-        <div class="toggle-group" role="tablist" aria-label="Transaction type">
-          <button type="button" class="toggle-btn active" data-type="expense" id="toggle-expense">Expense</button>
-          <button type="button" class="toggle-btn" data-type="income" id="toggle-income">Income</button>
-        </div>
-        <div class="form-row">
-          <div class="field amount-field">
-            <label for="amount">Amount</label>
-            <input type="number" id="amount" name="amount" step="0.01" min="0" placeholder="0.00" required>
-          </div>
-          <div class="field">
-            <label for="category">Category</label>
-            <select id="category" name="category" required>
-              {{range .Categories}}<option value="{{.}}">{{.}}</option>{{end}}
-            </select>
-          </div>
-          <div class="field description-field">
-            <label for="description">Description</label>
-            <input type="text" id="description" name="description" placeholder="Optional note">
-          </div>
-          <div class="field">
-            <label for="date">Date</label>
-            <input type="date" id="date" name="date" required>
-          </div>
-          <div class="field submit-field">
-            <label>&nbsp;</label>
-            <button type="submit" class="btn-primary">Add</button>
-          </div>
-        </div>
-      </form>
-    </section>
-
-    <section class="summary-grid">
-      <div class="card summary-card income">
-        <div class="summary-label">Total Income</div>
-        <div class="summary-value" id="summary-income">$0.00</div>
-      </div>
-      <div class="card summary-card expense">
-        <div class="summary-label">Total Expenses</div>
-        <div class="summary-value" id="summary-expenses">$0.00</div>
-      </div>
-      <div class="card summary-card balance">
-        <div class="summary-label">Balance</div>
-        <div class="summary-value" id="summary-balance">$0.00</div>
-      </div>
-    </section>
-
-    <section class="card breakdown-card">
-      <h2 class="section-title">Spending by Category</h2>
-      <div id="category-breakdown" class="category-breakdown">
-        <p class="empty-state">No spending yet this month.</p>
-      </div>
-    </section>
-
-    <section class="card transactions-card">
-      <h2 class="section-title">Transactions</h2>
-      <div id="transactions-list" class="transactions-list">
-        <p class="empty-state">No transactions yet this month.</p>
-      </div>
-    </section>
-
-  </main>
-
-  <footer class="footer">
-    <span>Served from {{.Hostname}}</span>
-  </footer>
-</div>
-
-<template id="transaction-row-template">
-  <div class="transaction-row">
-    <div class="transaction-category-dot"></div>
-    <div class="transaction-main">
-      <div class="transaction-description"></div>
-      <div class="transaction-category"></div>
+    <div class="note-row">
+      <input type="text" id="note-input" class="note-input" placeholder="Add a note (optional)" maxlength="100">
     </div>
-    <div class="transaction-amount"></div>
-    <button class="delete-btn" aria-label="Delete transaction">&times;</button>
+
+    <div class="categories" id="categories"></div>
+
+    <div class="numpad">
+      <button class="num-key" data-key="1">1</button>
+      <button class="num-key" data-key="2">2</button>
+      <button class="num-key" data-key="3">3</button>
+      <button class="num-key" data-key="4">4</button>
+      <button class="num-key" data-key="5">5</button>
+      <button class="num-key" data-key="6">6</button>
+      <button class="num-key" data-key="7">7</button>
+      <button class="num-key" data-key="8">8</button>
+      <button class="num-key" data-key="9">9</button>
+      <button class="num-key dot-key" data-key=".">.</button>
+      <button class="num-key" data-key="0">0</button>
+      <button class="num-key del-key" data-key="del">⌫</button>
+    </div>
   </div>
-</template>
 
-<script src="/static/script.js"></script>
+  <!-- ===== HISTORY SCREEN ===== -->
+  <div class="screen" id="screen-history">
+    <header class="top-bar">
+      <button class="icon-btn" id="btn-back" aria-label="Back">←</button>
+      <div class="month-nav">
+        <button class="month-arrow" id="month-prev">‹</button>
+        <span id="month-label" class="month-label"></span>
+        <button class="month-arrow" id="month-next">›</button>
+      </div>
+      <div style="width:40px"></div>
+    </header>
+
+    <div class="summary-strip">
+      <div class="summary-item">
+        <div class="summary-label">Spent</div>
+        <div class="summary-val expense" id="sum-expense">$0</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Income</div>
+        <div class="summary-val income" id="sum-income">$0</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Net</div>
+        <div class="summary-val" id="sum-net">$0</div>
+      </div>
+    </div>
+
+    <div class="cat-summary" id="cat-summary"></div>
+
+    <div class="txn-list" id="txn-list"></div>
+  </div>
+
+  <!-- ===== TOAST ===== -->
+  <div id="toast" class="toast"></div>
+
+  <script src="/static/script.js"></script>
 </body>
 </html>

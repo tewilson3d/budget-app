@@ -1,10 +1,13 @@
-.PHONY: build clean stop start restart test
+.PHONY: build deploy test db
 
 build:
-	go build -o srv ./cmd/srv
+	go build -o /home/exedev/srv ./cmd/srv
 
-clean:
-	rm -f srv
+deploy:
+	./deploy.sh
 
 test:
 	go test ./...
+
+db:
+	cd db && go tool sqlc generate

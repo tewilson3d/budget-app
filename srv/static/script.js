@@ -1,300 +1,196 @@
-(() => {
-  'use strict';
+(()=>{
+'use strict';
 
-  const CATEGORY_COLORS = {
-    Income: 'var(--cat-income)',
-    Food: 'var(--cat-food)',
-    Transport: 'var(--cat-transport)',
-    Housing: 'var(--cat-housing)',
-    Utilities: 'var(--cat-utilities)',
-    Entertainment: 'var(--cat-entertainment)',
-    Shopping: 'var(--cat-shopping)',
-    Health: 'var(--cat-health)',
-    Education: 'var(--cat-education)',
-    Other: 'var(--cat-other)',
-  };
+const CATS = [
+  {name:'Food',icon:'🍔',color:'#f97316'},
+  {name:'Coffee',icon:'☕',color:'#92400e'},
+  {name:'Transport',icon:'🚗',color:'#3b82f6'},
+  {name:'Shopping',icon:'🛍️',color:'#8b5cf6'},
+  {name:'Health',icon:'💊',color:'#ef4444'},
+  {name:'Bills',icon:'💱',color:'#eab308'},
+  {name:'Fun',icon:'🎮',color:'#ec4899'},
+  {name:'Home',icon:'🏠',color:'#14b8a6'},
+  {name:'Income',icon:'💰',color:'#10b981'},
+  {name:'Other',icon:'📦',color:'#6b7280'},
+];
+const catMap = Object.fromEntries(CATS.map(c=>[c.name,c]));
+const getCat = n => catMap[n]||{name:n,icon:'📦',color:'#6b7280'};
 
-  function currentMonthString() {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  }
+let amt = '0';
+let selectedCat = null;
+let histMonth = new Date();
 
-  const state = {
-    month: currentMonthString(),
-    type: 'expense',
-  };
+// DOM
+const $=id=>document.getElementById(id);
+const amtEl=$('amount-value'), noteEl=$('note-input'), catsEl=$('categories');
+const toastEl=$('toast'), todayBadge=$('today-total-badge'), topDate=$('top-date');
+const screenEntry=$('screen-entry'), screenHistory=$('screen-history');
 
-  const els = {
-    currentMonth: document.getElementById('current-month'),
-    prevMonth: document.getElementById('prev-month'),
-    nextMonth: document.getElementById('next-month'),
-    form: document.getElementById('add-form'),
-    amount: document.getElementById('amount'),
-    category: document.getElementById('category'),
-    description: document.getElementById('description'),
-    date: document.getElementById('date'),
-    toggleExpense: document.getElementById('toggle-expense'),
-    toggleIncome: document.getElementById('toggle-income'),
-    summaryIncome: document.getElementById('summary-income'),
-    summaryExpenses: document.getElementById('summary-expenses'),
-    summaryBalance: document.getElementById('summary-balance'),
-    categoryBreakdown: document.getElementById('category-breakdown'),
-    transactionsList: document.getElementById('transactions-list'),
-    rowTemplate: document.getElementById('transaction-row-template'),
-    authStatus: document.getElementById('auth-status'),
-  };
+// --- Helpers ---
+function fmtMoney(n){return '$'+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',')}
+function fmtDate(s){const d=new Date(s+'T12:00:00');return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
+function monthStr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
+function fmtMonth(d){return d.toLocaleDateString('en-US',{month:'long',year:'numeric'})}
+function today(){return new Date().toISOString().split('T')[0]}
+function toast(msg,ok){
+  toastEl.textContent=msg;toastEl.className='toast'+(ok?' success':'')+' show';
+  setTimeout(()=>toastEl.classList.remove('show'),2000)
+}
+async function api(url,opts){
+  const r=await fetch(url,opts);
+  if(!r.ok){const b=await r.json().catch(()=>({}));throw new Error(b.error||'failed')}
+  return r.json()
+}
 
-  function todayString() {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  }
+// --- Amount pad ---
+function setAmt(v){amt=v;amtEl.textContent=amt}
+function pressKey(k){
+  if(k==='del'){setAmt(amt.length<=1?'0':amt.slice(0,-1));return}
+  if(k==='.'&&amt.includes('.'))return;
+  if(amt.includes('.')&&amt.split('.')[1].length>=2)return;
+  if(amt==='0'&&k!=='.')setAmt(k);else setAmt(amt+k)
+}
 
-  function formatMonthLabel(monthStr) {
-    const [y, m] = monthStr.split('-').map(Number);
-    const d = new Date(y, m - 1, 1);
-    return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-  }
+// --- Render categories ---
+function renderCats(){
+  catsEl.innerHTML=CATS.map(c=>
+    `<button class="cat-btn${selectedCat===c.name?' selected':''}" data-cat="${c.name}">
+      <span class="cat-icon">${c.icon}</span>
+      <span class="cat-name">${c.name}</span>
+    </button>`
+  ).join('');
+}
 
-  function shiftMonth(monthStr, delta) {
-    const [y, m] = monthStr.split('-').map(Number);
-    const d = new Date(y, m - 1 + delta, 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  }
-
-  function formatCurrency(value) {
-    const sign = value < 0 ? '-' : '';
-    return `${sign}$${Math.abs(value).toFixed(2)}`;
-  }
-
-  function formatDateHeading(dateStr) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    const date = new Date(y, m - 1, d);
-    return date.toLocaleDateString(undefined, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
+// --- Submit on category tap ---
+async function submit(catName){
+  const val=parseFloat(amt);
+  if(!val||val<=0){toast('Enter an amount first');return}
+  const isIncome = catName==='Income';
+  const amount = isIncome ? val : -val;
+  try{
+    await api('/api/transactions',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({amount,category:catName,description:noteEl.value.trim(),date:today()})
     });
-  }
+    toast(isIncome?'+'+fmtMoney(val)+' income':fmtMoney(val)+' '+catName,true);
+    setAmt('0');noteEl.value='';selectedCat=null;renderCats();
+    loadTodayTotal();
+  }catch(e){toast('Error: '+e.message)}
+}
 
-  async function apiFetch(url, options) {
-    const resp = await fetch(url, options);
-    if (resp.status === 401) {
-      setUnauthenticated();
-      throw new Error('unauthenticated');
-    }
-    if (!resp.ok) {
-      let message = `Request failed (${resp.status})`;
-      try {
-        const body = await resp.json();
-        if (body && body.error) message = body.error;
-      } catch (e) {
-        // ignore
-      }
-      throw new Error(message);
-    }
-    if (resp.status === 204) return null;
-    return resp.json();
-  }
+// --- Today total badge ---
+async function loadTodayTotal(){
+  try{
+    const d=await api('/api/summary?month='+monthStr(new Date()));
+    const spent=Math.abs(d.total_expenses||0);
+    todayBadge.textContent=fmtMoney(spent);
+  }catch(e){todayBadge.textContent='$0'}
+}
 
-  function setUnauthenticated() {
-    els.authStatus.textContent = 'Not signed in';
-  }
+// --- History screen ---
+function showHistory(){screenHistory.classList.add('active');screenEntry.classList.add('slide-left');loadHistory()}
+function hideHistory(){screenHistory.classList.remove('active');screenEntry.classList.remove('slide-left')}
 
-  function setType(type) {
-    state.type = type;
-    els.toggleExpense.classList.toggle('active', type === 'expense');
-    els.toggleIncome.classList.toggle('active', type === 'income');
-    if (type === 'income') {
-      els.category.value = 'Income';
-    } else if (els.category.value === 'Income') {
-      els.category.value = 'Food';
-    }
-  }
+async function loadHistory(){
+  const m=monthStr(histMonth);
+  $('month-label').textContent=fmtMonth(histMonth);
+  try{
+    const [txData,summary]=await Promise.all([
+      api('/api/transactions?month='+m),
+      api('/api/summary?month='+m)
+    ]);
+    renderSummary(summary);
+    renderTxns(txData.transactions||[]);
+  }catch(e){console.error(e)}
+}
 
-  function renderMonth() {
-    els.currentMonth.textContent = formatMonthLabel(state.month);
-  }
+function renderSummary(s){
+  $('sum-expense').textContent=fmtMoney(s.total_expenses||0);
+  $('sum-income').textContent=fmtMoney(s.total_income||0);
+  const net=(s.total_income||0)-(s.total_expenses||0);
+  const netEl=$('sum-net');
+  netEl.textContent=(net<0?'-':'')+fmtMoney(net);
+  netEl.className='summary-val'+(net<0?' expense':net>0?' income':'');
 
-  function renderSummary(summary) {
-    els.summaryIncome.textContent = formatCurrency(summary.total_income);
-    els.summaryExpenses.textContent = formatCurrency(summary.total_expenses);
-    els.summaryBalance.textContent = formatCurrency(summary.balance);
+  const cats=(s.by_category||[]).filter(c=>c.total<0).sort((a,b)=>a.total-b.total);
+  $('cat-summary').innerHTML=cats.map(c=>{
+    const info=getCat(c.category);
+    return `<span class="cat-pill"><span class="pill-icon">${info.icon}</span>${c.category} <span class="pill-amount">${fmtMoney(c.total)}</span></span>`
+  }).join('');
+}
 
-    const container = els.categoryBreakdown;
-    container.innerHTML = '';
-
-    const expenseCategories = (summary.by_category || [])
-      .filter((c) => c.total < 0)
-      .map((c) => ({ category: c.category, total: Math.abs(c.total) }))
-      .sort((a, b) => b.total - a.total);
-
-    if (expenseCategories.length === 0) {
-      container.innerHTML = '<p class="empty-state">No spending yet this month.</p>';
-      return;
-    }
-
-    const maxTotal = Math.max(...expenseCategories.map((c) => c.total));
-
-    for (const entry of expenseCategories) {
-      const row = document.createElement('div');
-      row.className = 'category-bar-row';
-
-      const label = document.createElement('div');
-      label.className = 'category-bar-label';
-      label.textContent = entry.category;
-
-      const track = document.createElement('div');
-      track.className = 'category-bar-track';
-      const fill = document.createElement('div');
-      fill.className = 'category-bar-fill';
-      const pct = maxTotal > 0 ? (entry.total / maxTotal) * 100 : 0;
-      fill.style.width = `${pct}%`;
-      fill.style.background = CATEGORY_COLORS[entry.category] || CATEGORY_COLORS.Other;
-      track.appendChild(fill);
-
-      const value = document.createElement('div');
-      value.className = 'category-bar-value';
-      value.textContent = formatCurrency(entry.total);
-
-      row.appendChild(label);
-      row.appendChild(track);
-      row.appendChild(value);
-      container.appendChild(row);
-    }
-  }
-
-  function renderTransactions(transactions) {
-    const container = els.transactionsList;
-    container.innerHTML = '';
-
-    if (!transactions || transactions.length === 0) {
-      container.innerHTML = '<p class="empty-state">No transactions yet this month.</p>';
-      return;
-    }
-
-    const groups = new Map();
-    for (const t of transactions) {
-      if (!groups.has(t.date)) groups.set(t.date, []);
-      groups.get(t.date).push(t);
-    }
-
-    const sortedDates = Array.from(groups.keys()).sort((a, b) => (a < b ? 1 : -1));
-
-    for (const date of sortedDates) {
-      const groupEl = document.createElement('div');
-      groupEl.className = 'transaction-date-group';
-
-      const heading = document.createElement('div');
-      heading.className = 'transaction-date-heading';
-      heading.textContent = formatDateHeading(date);
-      groupEl.appendChild(heading);
-
-      for (const t of groups.get(date)) {
-        groupEl.appendChild(buildTransactionRow(t));
-      }
-
-      container.appendChild(groupEl);
-    }
-  }
-
-  function buildTransactionRow(t) {
-    const fragment = els.rowTemplate.content.cloneNode(true);
-    const row = fragment.querySelector('.transaction-row');
-    const dot = fragment.querySelector('.transaction-category-dot');
-    const desc = fragment.querySelector('.transaction-description');
-    const cat = fragment.querySelector('.transaction-category');
-    const amount = fragment.querySelector('.transaction-amount');
-    const deleteBtn = fragment.querySelector('.delete-btn');
-
-    dot.style.background = CATEGORY_COLORS[t.category] || CATEGORY_COLORS.Other;
-    desc.textContent = t.description || t.category;
-    cat.textContent = t.category;
-    amount.textContent = (t.amount >= 0 ? '+' : '') + formatCurrency(t.amount);
-    amount.classList.add(t.amount >= 0 ? 'positive' : 'negative');
-
-    deleteBtn.addEventListener('click', () => deleteTransaction(t.id));
-
-    row.dataset.id = t.id;
-    return row;
-  }
-
-  async function deleteTransaction(id) {
-    if (!confirm('Delete this transaction?')) return;
-    try {
-      await apiFetch(`/api/transactions/${id}`, { method: 'DELETE' });
-      await refresh();
-    } catch (err) {
-      alert(err.message);
-    }
-  }
-
-  async function refresh() {
-    renderMonth();
-    try {
-      const [txData, summaryData] = await Promise.all([
-        apiFetch(`/api/transactions?month=${encodeURIComponent(state.month)}`),
-        apiFetch(`/api/summary?month=${encodeURIComponent(state.month)}`),
-      ]);
-      renderTransactions(txData.transactions);
-      renderSummary(summaryData);
-    } catch (err) {
-      if (err.message !== 'unauthenticated') {
-        console.error(err);
-      }
-    }
-  }
-
-  async function handleSubmit(evt) {
-    evt.preventDefault();
-
-    const rawAmount = parseFloat(els.amount.value);
-    if (isNaN(rawAmount) || rawAmount <= 0) {
-      alert('Please enter a valid amount.');
-      return;
-    }
-    const amount = state.type === 'income' ? Math.abs(rawAmount) : -Math.abs(rawAmount);
-
-    const payload = {
-      amount,
-      category: els.category.value,
-      description: els.description.value.trim(),
-      date: els.date.value,
-    };
-
-    try {
-      await apiFetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      els.amount.value = '';
-      els.description.value = '';
-      await refresh();
-    } catch (err) {
-      alert(err.message);
-    }
-  }
-
-  function init() {
-    els.date.value = todayString();
-    setType('expense');
-
-    els.toggleExpense.addEventListener('click', () => setType('expense'));
-    els.toggleIncome.addEventListener('click', () => setType('income'));
-
-    els.prevMonth.addEventListener('click', () => {
-      state.month = shiftMonth(state.month, -1);
-      refresh();
+function renderTxns(txns){
+  const el=$('txn-list');
+  if(!txns.length){el.innerHTML='<div class="empty-msg"><div class="e-icon">💭</div>No transactions this month</div>';return}
+  const groups={};
+  txns.forEach(t=>{(groups[t.date]=groups[t.date]||[]).push(t)});
+  let html='';
+  Object.keys(groups).sort().reverse().forEach(date=>{
+    html+=`<div class="date-label">${fmtDate(date)}</div>`;
+    groups[date].forEach(t=>{
+      const info=getCat(t.category);
+      const pos=t.amount>=0;
+      const desc = (t.description && typeof t.description === 'string') ? t.description : '';
+      html+=`<div class="txn-row">
+        <span class="txn-icon">${info.icon}</span>
+        <div class="txn-info">
+          <div class="txn-cat">${t.category}</div>
+          ${desc?`<div class="txn-note">${esc(desc)}</div>`:''}
+        </div>
+        <span class="txn-amt ${pos?'pos':'neg'}">${pos?'+':''}${fmtMoney(t.amount)}</span>
+        <button class="txn-del" data-id="${t.id}">✕</button>
+      </div>`;
     });
-    els.nextMonth.addEventListener('click', () => {
-      state.month = shiftMonth(state.month, 1);
-      refresh();
-    });
+  });
+  el.innerHTML=html;
+  el.querySelectorAll('.txn-del').forEach(b=>b.addEventListener('click',()=>delTxn(b.dataset.id)));
+}
 
-    els.form.addEventListener('submit', handleSubmit);
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
-    refresh();
+async function delTxn(id){
+  if(!confirm('Delete this transaction?'))return;
+  try{await api('/api/transactions/'+id,{method:'DELETE'});toast('Deleted',true);loadHistory();loadTodayTotal()}catch(e){toast('Error: '+e.message)}
+}
+
+// --- Events ---
+document.querySelector('.numpad').addEventListener('click',e=>{
+  const k=e.target.closest('.num-key');
+  if(k)pressKey(k.dataset.key);
+});
+
+catsEl.addEventListener('click',e=>{
+  const btn=e.target.closest('.cat-btn');
+  if(!btn)return;
+  const cat=btn.dataset.cat;
+  // If amount entered, submit immediately. Otherwise just select.
+  if(amt!=='0'&&parseFloat(amt)>0){
+    submit(cat);
+  } else {
+    selectedCat=selectedCat===cat?null:cat;
+    renderCats();
   }
+});
 
-  document.addEventListener('DOMContentLoaded', init);
+$('btn-history').addEventListener('click',showHistory);
+$('btn-today-total').addEventListener('click',showHistory);
+$('btn-back').addEventListener('click',hideHistory);
+$('month-prev').addEventListener('click',()=>{histMonth.setMonth(histMonth.getMonth()-1);loadHistory()});
+$('month-next').addEventListener('click',()=>{histMonth.setMonth(histMonth.getMonth()+1);loadHistory()});
+
+// physical keyboard
+document.addEventListener('keydown',e=>{
+  if(document.activeElement===noteEl)return;
+  if(e.key>='0'&&e.key<='9')pressKey(e.key);
+  else if(e.key==='.')pressKey('.');
+  else if(e.key==='Backspace')pressKey('del');
+});
+
+// --- Init ---
+topDate.textContent=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+renderCats();
+loadTodayTotal();
+
+// PWA install
+if('serviceWorker' in navigator){navigator.serviceWorker.register('/static/sw.js').catch(()=>{})}
 })();

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#0f172a">
   <meta name="mobile-web-app-capable" content="yes">
   <title>SpendSnap</title>
   <link rel="manifest" href="/static/manifest.json">
@@ -14,22 +14,20 @@
 </head>
 <body>
 
-  <!-- ===== MAIN SCREEN: Quick Entry ===== -->
+  <!-- ===== ENTRY SCREEN ===== -->
   <div class="screen active" id="screen-entry">
     <header class="top-bar">
-      <button class="icon-btn" id="btn-history" aria-label="History">📋</button>
       <div class="top-date" id="top-date"></div>
-      <button class="icon-btn" id="btn-today-total" aria-label="Today total">
-        <span id="today-total-badge">$0</span>
-      </button>
+      <button class="link-btn" id="btn-budgets" aria-label="Budgets">Budgets ›</button>
     </header>
 
-    <div class="amount-display">
-      <span class="currency">$</span><span id="amount-value" class="amount-num">0</span>
+    <div class="food-reminder" id="food-reminder">
+      <div class="fr-bar"><div class="fr-fill" id="fr-fill"></div></div>
+      <div class="fr-text" id="fr-text">Food today: —</div>
     </div>
 
-    <div class="note-row">
-      <input type="text" id="note-input" class="note-input" placeholder="Add a note (optional)" maxlength="100">
+    <div class="amount-display">
+      <span class="currency">฿</span><span id="amount-value" class="amount-num">0</span>
     </div>
 
     <div class="categories" id="categories"></div>
@@ -50,34 +48,21 @@
     </div>
   </div>
 
-  <!-- ===== HISTORY SCREEN ===== -->
-  <div class="screen" id="screen-history">
+  <!-- ===== BUDGET / OVERVIEW SCREEN ===== -->
+  <div class="screen" id="screen-budget">
     <header class="top-bar">
-      <button class="icon-btn" id="btn-back" aria-label="Back">←</button>
+      <button class="icon-btn" id="btn-back" aria-label="Back">‹</button>
       <div class="month-nav">
         <button class="month-arrow" id="month-prev">‹</button>
         <span id="month-label" class="month-label"></span>
         <button class="month-arrow" id="month-next">›</button>
       </div>
-      <div style="width:40px"></div>
+      <button class="icon-btn" id="btn-push" aria-label="Push to Sheets">☁︎</button>
     </header>
 
-    <div class="summary-strip">
-      <div class="summary-item">
-        <div class="summary-label">Spent</div>
-        <div class="summary-val expense" id="sum-expense">$0</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">Income</div>
-        <div class="summary-val income" id="sum-income">$0</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">Net</div>
-        <div class="summary-val" id="sum-net">$0</div>
-      </div>
-    </div>
+    <div class="month-total" id="month-total">Spent this month: —</div>
 
-    <div class="cat-summary" id="cat-summary"></div>
+    <div class="budget-cards" id="budget-cards"></div>
 
     <div class="txn-list" id="txn-list"></div>
   </div>

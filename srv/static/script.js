@@ -1,144 +1,196 @@
 (()=>{
 'use strict';
 
+// Categories (must match server). Order = 2x2 grid.
 const CATS = [
-  {name:'Food',icon:'🍔',color:'#f97316'},
-  {name:'Coffee',icon:'☕',color:'#92400e'},
-  {name:'Transport',icon:'🚗',color:'#3b82f6'},
-  {name:'Shopping',icon:'🛍️',color:'#8b5cf6'},
-  {name:'Health',icon:'💊',color:'#ef4444'},
-  {name:'Bills',icon:'💱',color:'#eab308'},
-  {name:'Fun',icon:'🎮',color:'#ec4899'},
-  {name:'Home',icon:'🏠',color:'#14b8a6'},
-  {name:'Income',icon:'💰',color:'#10b981'},
-  {name:'Other',icon:'📦',color:'#6b7280'},
+  {name:'Food',        icon:'\u{1F35C}', color:'#f97316', period:'daily'},
+  {name:'Groceries',   icon:'\u{1F6D2}', color:'#3b82f6', period:'monthly'},
+  {name:'Dogs',        icon:'\u{1F436}', color:'#a855f7', period:'monthly'},
+  {name:'Miscellaneous',icon:'\u{1F4E6}',color:'#6b7280', period:'monthly'},
 ];
 const catMap = Object.fromEntries(CATS.map(c=>[c.name,c]));
-const getCat = n => catMap[n]||{name:n,icon:'📦',color:'#6b7280'};
+const getCat = n => catMap[n]||{name:n,icon:'\u{1F4E6}',color:'#6b7280'};
 
 let amt = '0';
-let selectedCat = null;
-let histMonth = new Date();
+let viewMonth = new Date();
 
 // DOM
 const $=id=>document.getElementById(id);
-const amtEl=$('amount-value'), noteEl=$('note-input'), catsEl=$('categories');
-const toastEl=$('toast'), todayBadge=$('today-total-badge'), topDate=$('top-date');
-const screenEntry=$('screen-entry'), screenHistory=$('screen-history');
+const amtEl=$('amount-value'), catsEl=$('categories'), toastEl=$('toast'), topDate=$('top-date');
+const screenEntry=$('screen-entry'), screenBudget=$('screen-budget');
 
 // --- Helpers ---
-function fmtMoney(n){return '$'+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',')}
-function fmtDate(s){const d=new Date(s+'T12:00:00');return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
+function fmtB(n){
+  const v=Math.round((Math.abs(n)+Number.EPSILON)*100)/100;
+  const s=(v%1===0)?v.toFixed(0):v.toFixed(2);
+  return '\u0e3f'+s.replace(/\B(?=(\d{3})+(?!\d))/g,',');
+}
 function monthStr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
 function fmtMonth(d){return d.toLocaleDateString('en-US',{month:'long',year:'numeric'})}
-function today(){return new Date().toISOString().split('T')[0]}
+function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function fmtDate(s){const d=new Date(s+'T12:00:00');return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
 function toast(msg,ok){
-  toastEl.textContent=msg;toastEl.className='toast'+(ok?' success':'')+' show';
-  setTimeout(()=>toastEl.classList.remove('show'),2000)
+  toastEl.textContent=msg;toastEl.className='toast'+(ok?' success':' error')+' show';
+  setTimeout(()=>toastEl.classList.remove('show'),1800);
 }
 async function api(url,opts){
   const r=await fetch(url,opts);
   if(!r.ok){const b=await r.json().catch(()=>({}));throw new Error(b.error||'failed')}
-  return r.json()
+  return r.json();
 }
 
 // --- Amount pad ---
 function setAmt(v){amt=v;amtEl.textContent=amt}
 function pressKey(k){
   if(k==='del'){setAmt(amt.length<=1?'0':amt.slice(0,-1));return}
-  if(k==='.'&&amt.includes('.'))return;
+  if(k==='.'){if(amt.includes('.'))return; setAmt(amt+'.'); return}
   if(amt.includes('.')&&amt.split('.')[1].length>=2)return;
-  if(amt==='0'&&k!=='.')setAmt(k);else setAmt(amt+k)
+  if(amt==='0')setAmt(k);else setAmt(amt+k);
 }
 
-// --- Render categories ---
+// --- Categories (entry) ---
 function renderCats(){
   catsEl.innerHTML=CATS.map(c=>
-    `<button class="cat-btn${selectedCat===c.name?' selected':''}" data-cat="${c.name}">
+    `<button class="cat-btn" data-cat="${c.name}" style="--c:${c.color}">
       <span class="cat-icon">${c.icon}</span>
       <span class="cat-name">${c.name}</span>
     </button>`
   ).join('');
 }
 
-// --- Submit on category tap ---
 async function submit(catName){
   const val=parseFloat(amt);
   if(!val||val<=0){toast('Enter an amount first');return}
-  const isIncome = catName==='Income';
-  const amount = isIncome ? val : -val;
   try{
     await api('/api/transactions',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({amount,category:catName,description:noteEl.value.trim(),date:today()})
+      body:JSON.stringify({amount:val,category:catName,date:today()})
     });
-    toast(isIncome?'+'+fmtMoney(val)+' income':fmtMoney(val)+' '+catName,true);
-    setAmt('0');noteEl.value='';selectedCat=null;renderCats();
-    loadTodayTotal();
+    toast('Saved '+fmtB(val)+' \u00b7 '+catName,true);
+    if(navigator.vibrate)navigator.vibrate(15);
+    setAmt('0');
+    loadReminder();
   }catch(e){toast('Error: '+e.message)}
 }
 
-// --- Today total badge ---
-async function loadTodayTotal(){
+// --- Food reminder (entry page) ---
+async function loadReminder(){
   try{
     const d=await api('/api/summary?month='+monthStr(new Date()));
-    const spent=Math.abs(d.total_expenses||0);
-    todayBadge.textContent=fmtMoney(spent);
-  }catch(e){todayBadge.textContent='$0'}
+    const food=(d.today&&d.today.food)||0;
+    const budget=(d.today&&d.today.food_budget)||0;
+    const frText=$('fr-text'), frFill=$('fr-fill');
+    if(budget>0){
+      const pct=Math.min(100,(food/budget)*100);
+      frFill.style.width=pct+'%';
+      const over=food>budget;
+      frFill.style.background=over?'var(--red)':(pct>80?'var(--amber)':'var(--green)');
+      const diff=budget-food;
+      frText.innerHTML=`Food today: <b>${fmtB(food)}</b> of ${fmtB(budget)} `+
+        (over?`<span class="over">(${fmtB(-diff)} over)</span>`:`<span class="under">(${fmtB(diff)} left)</span>`);
+    }else{
+      frFill.style.width='0%';
+      frText.innerHTML=`Food today: <b>${fmtB(food)}</b> (no budget set)`;
+    }
+  }catch(e){/* silent */}
 }
 
-// --- History screen ---
-function showHistory(){screenHistory.classList.add('active');screenEntry.classList.add('slide-left');loadHistory()}
-function hideHistory(){screenHistory.classList.remove('active');screenEntry.classList.remove('slide-left')}
+// --- Navigation ---
+function showBudget(){screenBudget.classList.add('active');screenEntry.classList.add('slide-left');loadBudget()}
+function hideBudget(){screenBudget.classList.remove('active');screenEntry.classList.remove('slide-left')}
 
-async function loadHistory(){
-  const m=monthStr(histMonth);
-  $('month-label').textContent=fmtMonth(histMonth);
+// --- Budget / overview page ---
+let lastSummary=null;
+async function loadBudget(){
+  const m=monthStr(viewMonth);
+  $('month-label').textContent=fmtMonth(viewMonth);
   try{
-    const [txData,summary]=await Promise.all([
-      api('/api/transactions?month='+m),
-      api('/api/summary?month='+m)
+    const [summary,txData]=await Promise.all([
+      api('/api/summary?month='+m),
+      api('/api/transactions?month='+m)
     ]);
-    renderSummary(summary);
+    lastSummary=summary;
+    renderBudgetCards(summary);
     renderTxns(txData.transactions||[]);
-  }catch(e){console.error(e)}
+    $('month-total').innerHTML='Spent this month: <b>'+fmtB(summary.month_total||0)+'</b>';
+  }catch(e){console.error(e);toast('Load error: '+e.message)}
 }
 
-function renderSummary(s){
-  $('sum-expense').textContent=fmtMoney(s.total_expenses||0);
-  $('sum-income').textContent=fmtMoney(s.total_income||0);
-  const net=(s.total_income||0)-(s.total_expenses||0);
-  const netEl=$('sum-net');
-  netEl.textContent=(net<0?'-':'')+fmtMoney(net);
-  netEl.className='summary-val'+(net<0?' expense':net>0?' income':'');
-
-  const cats=(s.by_category||[]).filter(c=>c.total<0).sort((a,b)=>a.total-b.total);
-  $('cat-summary').innerHTML=cats.map(c=>{
+function renderBudgetCards(s){
+  const el=$('budget-cards');
+  const dayOfMonth=s.day_of_month||1;
+  const dim=s.days_in_month||30;
+  el.innerHTML=(s.categories||[]).map(c=>{
     const info=getCat(c.category);
-    return `<span class="cat-pill"><span class="pill-icon">${info.icon}</span>${c.category} <span class="pill-amount">${fmtMoney(c.total)}</span></span>`
+    const budget=c.budget||0;
+    const spent=c.month||0; // month-to-date spend for the bar
+    const pct=budget>0?Math.min(100,(spent/budget)*100):0;
+    const over=budget>0&&spent>budget;
+    let paceHtml='';
+    if(c.period==='daily'){
+      // Food: expected pace by today
+      const pace=(s.food_month_pace!=null)?s.food_month_pace:0;
+      const dailyBudget=(s.today&&s.today.food_budget)||0;
+      const diffPace=spent-pace;
+      const paceCls=diffPace>0?'over':'under';
+      paceHtml=`<div class="bc-pace">Daily \u0e3f${fmtNum(dailyBudget)} \u00b7 by day ${dayOfMonth} expect ${fmtB(pace)} \u2192 `+
+        `<span class="${paceCls}">${diffPace>0?fmtB(diffPace)+' ahead':fmtB(-diffPace)+' under'}</span></div>`;
+    }
+    const barColor=over?'var(--red)':(pct>80?'var(--amber)':info.color);
+    const budgetLabel=budget>0?('of '+fmtB(budget)+(c.period==='daily'?' /mo':'')):'no budget';
+    return `<div class="bcard" data-cat="${c.category}">
+      <div class="bc-head">
+        <span class="bc-icon" style="background:${info.color}22;color:${info.color}">${info.icon}</span>
+        <span class="bc-name">${c.category}</span>
+        <span class="bc-badge">${c.period}</span>
+        <button class="bc-edit" data-cat="${c.category}" data-amt="${c.period==='daily'?((s.today&&s.today.food_budget)||0):budget}">edit</button>
+      </div>
+      <div class="bc-nums"><b>${fmtB(spent)}</b> <span class="bc-of">${budgetLabel}</span></div>
+      <div class="bc-bar"><div class="bc-fill" style="width:${pct}%;background:${barColor}"></div></div>
+      ${paceHtml}
+    </div>`;
   }).join('');
+  el.querySelectorAll('.bc-edit').forEach(b=>b.addEventListener('click',ev=>{
+    ev.stopPropagation();
+    editBudget(b.dataset.cat, parseFloat(b.dataset.amt)||0);
+  }));
+}
+
+function fmtNum(n){const v=Math.round(n);return v.toLocaleString('en-US')}
+
+async function editBudget(cat, current){
+  const info=getCat(cat);
+  const label=info.period==='daily'?'daily food budget (\u0e3f)':'monthly budget (\u0e3f)';
+  const v=prompt('Set '+cat+' '+label+':', current||'');
+  if(v===null)return;
+  const amount=parseFloat(v);
+  if(isNaN(amount)||amount<0){toast('Invalid amount');return}
+  try{
+    await api('/api/budgets/'+encodeURIComponent(cat),{
+      method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({amount})
+    });
+    toast('Budget saved',true);
+    loadBudget();loadReminder();
+  }catch(e){toast('Error: '+e.message)}
 }
 
 function renderTxns(txns){
   const el=$('txn-list');
-  if(!txns.length){el.innerHTML='<div class="empty-msg"><div class="e-icon">💭</div>No transactions this month</div>';return}
+  if(!txns.length){el.innerHTML='<div class="empty-msg"><div class="e-icon">\u{1F4AD}</div>No transactions this month</div>';return}
   const groups={};
   txns.forEach(t=>{(groups[t.date]=groups[t.date]||[]).push(t)});
   let html='';
   Object.keys(groups).sort().reverse().forEach(date=>{
-    html+=`<div class="date-label">${fmtDate(date)}</div>`;
+    const dayTotal=groups[date].reduce((a,t)=>a+t.amount,0);
+    html+=`<div class="date-label"><span>${fmtDate(date)}</span><span class="date-total">${fmtB(dayTotal)}</span></div>`;
     groups[date].forEach(t=>{
       const info=getCat(t.category);
-      const pos=t.amount>=0;
-      const desc = (t.description && typeof t.description === 'string') ? t.description : '';
       html+=`<div class="txn-row">
-        <span class="txn-icon">${info.icon}</span>
-        <div class="txn-info">
-          <div class="txn-cat">${t.category}</div>
-          ${desc?`<div class="txn-note">${esc(desc)}</div>`:''}
-        </div>
-        <span class="txn-amt ${pos?'pos':'neg'}">${pos?'+':''}${fmtMoney(t.amount)}</span>
-        <button class="txn-del" data-id="${t.id}">✕</button>
+        <span class="txn-icon" style="background:${info.color}22;color:${info.color}">${info.icon}</span>
+        <div class="txn-info"><div class="txn-cat">${t.category}</div></div>
+        <span class="txn-amt">${fmtB(t.amount)}</span>
+        <button class="txn-del" data-id="${t.id}">\u2715</button>
       </div>`;
     });
   });
@@ -146,11 +198,16 @@ function renderTxns(txns){
   el.querySelectorAll('.txn-del').forEach(b=>b.addEventListener('click',()=>delTxn(b.dataset.id)));
 }
 
-function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
-
 async function delTxn(id){
   if(!confirm('Delete this transaction?'))return;
-  try{await api('/api/transactions/'+id,{method:'DELETE'});toast('Deleted',true);loadHistory();loadTodayTotal()}catch(e){toast('Error: '+e.message)}
+  try{await api('/api/transactions/'+id,{method:'DELETE'});toast('Deleted',true);loadBudget();loadReminder()}catch(e){toast('Error: '+e.message)}
+}
+
+async function pushSheet(){
+  try{
+    const d=await api('/api/push',{method:'POST'});
+    toast(d.ok?'Pushed to Sheets':(d.message||'Not connected'), d.ok);
+  }catch(e){toast('Error: '+e.message)}
 }
 
 // --- Events ---
@@ -158,39 +215,27 @@ document.querySelector('.numpad').addEventListener('click',e=>{
   const k=e.target.closest('.num-key');
   if(k)pressKey(k.dataset.key);
 });
-
 catsEl.addEventListener('click',e=>{
   const btn=e.target.closest('.cat-btn');
-  if(!btn)return;
-  const cat=btn.dataset.cat;
-  // If amount entered, submit immediately. Otherwise just select.
-  if(amt!=='0'&&parseFloat(amt)>0){
-    submit(cat);
-  } else {
-    selectedCat=selectedCat===cat?null:cat;
-    renderCats();
+  if(btn)submit(btn.dataset.cat);
+});
+$('btn-budgets').addEventListener('click',showBudget);
+$('btn-back').addEventListener('click',hideBudget);
+$('btn-push').addEventListener('click',pushSheet);
+$('month-prev').addEventListener('click',()=>{viewMonth.setMonth(viewMonth.getMonth()-1);loadBudget()});
+$('month-next').addEventListener('click',()=>{viewMonth.setMonth(viewMonth.getMonth()+1);loadBudget()});
+
+document.addEventListener('keydown',e=>{
+  if(!screenBudget.classList.contains('active')){
+    if(e.key>='0'&&e.key<='9')pressKey(e.key);
+    else if(e.key==='.')pressKey('.');
+    else if(e.key==='Backspace')pressKey('del');
   }
 });
 
-$('btn-history').addEventListener('click',showHistory);
-$('btn-today-total').addEventListener('click',showHistory);
-$('btn-back').addEventListener('click',hideHistory);
-$('month-prev').addEventListener('click',()=>{histMonth.setMonth(histMonth.getMonth()-1);loadHistory()});
-$('month-next').addEventListener('click',()=>{histMonth.setMonth(histMonth.getMonth()+1);loadHistory()});
-
-// physical keyboard
-document.addEventListener('keydown',e=>{
-  if(document.activeElement===noteEl)return;
-  if(e.key>='0'&&e.key<='9')pressKey(e.key);
-  else if(e.key==='.')pressKey('.');
-  else if(e.key==='Backspace')pressKey('del');
-});
-
 // --- Init ---
-topDate.textContent=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+topDate.textContent=new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
 renderCats();
-loadTodayTotal();
-
-// PWA install
+loadReminder();
 if('serviceWorker' in navigator){navigator.serviceWorker.register('/static/sw.js').catch(()=>{})}
 })();

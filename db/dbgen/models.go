@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+type Budget struct {
+	UserID   string  `json:"user_id"`
+	Category string  `json:"category"`
+	Period   string  `json:"period"`
+	Amount   float64 `json:"amount"`
+}
+
 type Migration struct {
 	MigrationNumber int64     `json:"migration_number"`
 	MigrationName   string    `json:"migration_name"`

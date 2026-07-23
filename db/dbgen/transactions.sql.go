@@ -10,6 +10,98 @@ import (
 	"time"
 )
 
+const categoryTotalsForDay = `-- name: CategoryTotalsForDay :many
+SELECT
+  category,
+  SUM(amount) AS total
+FROM
+  transactions
+WHERE
+  user_id = ?
+  AND date = ?
+GROUP BY
+  category
+`
+
+type CategoryTotalsForDayParams struct {
+	UserID string `json:"user_id"`
+	Date   string `json:"date"`
+}
+
+type CategoryTotalsForDayRow struct {
+	Category string   `json:"category"`
+	Total    *float64 `json:"total"`
+}
+
+func (q *Queries) CategoryTotalsForDay(ctx context.Context, arg CategoryTotalsForDayParams) ([]CategoryTotalsForDayRow, error) {
+	rows, err := q.db.QueryContext(ctx, categoryTotalsForDay, arg.UserID, arg.Date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CategoryTotalsForDayRow{}
+	for rows.Next() {
+		var i CategoryTotalsForDayRow
+		if err := rows.Scan(&i.Category, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const categoryTotalsForMonth = `-- name: CategoryTotalsForMonth :many
+SELECT
+  category,
+  SUM(amount) AS total
+FROM
+  transactions
+WHERE
+  user_id = ?
+  AND substr(date, 1, 7) = ?
+GROUP BY
+  category
+`
+
+type CategoryTotalsForMonthParams struct {
+	UserID string `json:"user_id"`
+	Date   string `json:"date"`
+}
+
+type CategoryTotalsForMonthRow struct {
+	Category string   `json:"category"`
+	Total    *float64 `json:"total"`
+}
+
+func (q *Queries) CategoryTotalsForMonth(ctx context.Context, arg CategoryTotalsForMonthParams) ([]CategoryTotalsForMonthRow, error) {
+	rows, err := q.db.QueryContext(ctx, categoryTotalsForMonth, arg.UserID, arg.Date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CategoryTotalsForMonthRow{}
+	for rows.Next() {
+		var i CategoryTotalsForMonthRow
+		if err := rows.Scan(&i.Category, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createTransaction = `-- name: CreateTransaction :one
 INSERT INTO
   transactions (user_id, amount, category, description, date, created_at)
@@ -50,6 +142,54 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 	return i, err
 }
 
+const dayTotalsForMonth = `-- name: DayTotalsForMonth :many
+SELECT
+  date,
+  SUM(amount) AS total
+FROM
+  transactions
+WHERE
+  user_id = ?
+  AND substr(date, 1, 7) = ?
+GROUP BY
+  date
+ORDER BY
+  date
+`
+
+type DayTotalsForMonthParams struct {
+	UserID string `json:"user_id"`
+	Date   string `json:"date"`
+}
+
+type DayTotalsForMonthRow struct {
+	Date  string   `json:"date"`
+	Total *float64 `json:"total"`
+}
+
+func (q *Queries) DayTotalsForMonth(ctx context.Context, arg DayTotalsForMonthParams) ([]DayTotalsForMonthRow, error) {
+	rows, err := q.db.QueryContext(ctx, dayTotalsForMonth, arg.UserID, arg.Date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DayTotalsForMonthRow{}
+	for rows.Next() {
+		var i DayTotalsForMonthRow
+		if err := rows.Scan(&i.Date, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteTransaction = `-- name: DeleteTransaction :execrows
 DELETE FROM
   transactions
@@ -70,39 +210,31 @@ func (q *Queries) DeleteTransaction(ctx context.Context, arg DeleteTransactionPa
 	return result.RowsAffected()
 }
 
-const summaryForMonth = `-- name: SummaryForMonth :many
+const listBudgets = `-- name: ListBudgets :many
 SELECT
-  category,
-  SUM(amount) AS total
+  category, period, amount
 FROM
-  transactions
+  budgets
 WHERE
   user_id = ?
-  AND substr(date, 1, 7) = ?
-GROUP BY
-  category
 `
 
-type SummaryForMonthParams struct {
-	UserID string `json:"user_id"`
-	Date   string `json:"date"`
+type ListBudgetsRow struct {
+	Category string  `json:"category"`
+	Period   string  `json:"period"`
+	Amount   float64 `json:"amount"`
 }
 
-type SummaryForMonthRow struct {
-	Category string   `json:"category"`
-	Total    *float64 `json:"total"`
-}
-
-func (q *Queries) SummaryForMonth(ctx context.Context, arg SummaryForMonthParams) ([]SummaryForMonthRow, error) {
-	rows, err := q.db.QueryContext(ctx, summaryForMonth, arg.UserID, arg.Date)
+func (q *Queries) ListBudgets(ctx context.Context, userID string) ([]ListBudgetsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listBudgets, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []SummaryForMonthRow{}
+	items := []ListBudgetsRow{}
 	for rows.Next() {
-		var i SummaryForMonthRow
-		if err := rows.Scan(&i.Category, &i.Total); err != nil {
+		var i ListBudgetsRow
+		if err := rows.Scan(&i.Category, &i.Period, &i.Amount); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -162,4 +294,31 @@ func (q *Queries) TransactionsForMonth(ctx context.Context, arg TransactionsForM
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertBudget = `-- name: UpsertBudget :exec
+INSERT INTO
+  budgets (user_id, category, period, amount)
+VALUES
+  (?, ?, ?, ?)
+ON CONFLICT (user_id, category) DO UPDATE SET
+  period = excluded.period,
+  amount = excluded.amount
+`
+
+type UpsertBudgetParams struct {
+	UserID   string  `json:"user_id"`
+	Category string  `json:"category"`
+	Period   string  `json:"period"`
+	Amount   float64 `json:"amount"`
+}
+
+func (q *Queries) UpsertBudget(ctx context.Context, arg UpsertBudgetParams) error {
+	_, err := q.db.ExecContext(ctx, upsertBudget,
+		arg.UserID,
+		arg.Category,
+		arg.Period,
+		arg.Amount,
+	)
+	return err
 }

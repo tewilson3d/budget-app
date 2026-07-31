@@ -1,16 +1,15 @@
 [Unit]
-Description=Go web server
+Description=Budget Tracker (static PWA, Vite/React build)
+After=network.target
 
 [Service]
 Type=simple
 User=exedev
 Group=exedev
-WorkingDirectory=/home/exedev
-ExecStart=/home/exedev/srv
+WorkingDirectory=/home/exedev/budget-app
+ExecStart=/usr/bin/busybox httpd -f -p 8000 -h /home/exedev/budget-app/dist
 Restart=always
 RestartSec=5
-Environment=HOME=/home/exedev
-Environment=USER=exedev
 StandardOutput=journal
 StandardError=journal
 

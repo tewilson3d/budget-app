@@ -1,24 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Dashboard from './components/Dashboard'
 import EntryForm from './components/EntryForm'
 import History from './components/History'
+import MonthPage from './components/MonthPage'
 import SettingsPage from './components/SettingsPage'
-import { handleAuthCallback } from './auth'
 import { Category } from './types'
 
-export type Screen = 'dashboard' | 'entry' | 'history' | 'settings'
+export type Screen = 'dashboard' | 'entry' | 'history' | 'month' | 'settings'
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('dashboard')
   const [entryCategory, setEntryCategory] = useState<Category>('food')
-
-  // Handle Google OAuth redirect back to the app
-  useEffect(() => {
-    if (window.location.hash.includes('access_token')) {
-      handleAuthCallback()
-      setScreen('settings')
-    }
-  }, [])
 
   const openEntry = (cat: Category) => {
     setEntryCategory(cat)
@@ -28,7 +20,10 @@ export default function App() {
   return (
     <>
       {screen === 'dashboard' && (
-        <Dashboard onAddExpense={openEntry} onHistory={() => setScreen('history')} onSettings={() => setScreen('settings')} />
+        <Dashboard onAddExpense={openEntry} onHistory={() => setScreen('history')} onMonth={() => setScreen('month')} onSettings={() => setScreen('settings')} />
+      )}
+      {screen === 'month' && (
+        <MonthPage onBack={() => setScreen('dashboard')} />
       )}
       {screen === 'entry' && (
         <EntryForm initialCategory={entryCategory} onBack={() => setScreen('dashboard')} />

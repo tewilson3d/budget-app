@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { Category, CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS } from '../types'
 import { saveEntry } from '../storage'
+import { todayStr } from '../dates'
 
 const QUICK = [100, 200, 500, 1000, 1500, 2000]
-
-function todayStr() { return new Date().toISOString().slice(0, 10) }
 
 type Props = { initialCategory: Category; onBack: () => void }
 
@@ -17,7 +16,7 @@ export default function EntryForm({ initialCategory, onBack }: Props) {
   const handleSave = () => {
     const num = parseFloat(amount)
     if (!num || num <= 0) return
-    saveEntry({ id: `${Date.now()}-${Math.random()}`, date: todayStr(), category: cat, amount: num, note: note.trim() || undefined })
+    saveEntry({ id: `${Date.now()}-${Math.random()}`, date: todayStr(), category: cat, amount: num, note: note.trim() || undefined, ts: Date.now() })
     onBack()
   }
 

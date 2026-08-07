@@ -25,6 +25,21 @@ export function getEntriesForMonth(yearMonth: string): Entry[] {
   return getEntries().filter(e => e.date.startsWith(yearMonth));
 }
 
+function entryTs(e: Entry): number {
+  return e.ts ?? (parseInt(e.id) || 0);
+}
+
+// Current wallet balance: anchor amount minus everything spent since it was set.
+// Returns null if no balance has been set.
+export function getBalance(): number | null {
+  const anchor = getSettings().balanceAnchor;
+  if (!anchor) return null;
+  const spentSince = getEntries()
+    .filter(e => entryTs(e) > anchor.ts)
+    .reduce((sum, e) => sum + e.amount, 0);
+  return anchor.amount - spentSince;
+}
+
 export function getSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEYS.SETTINGS);
@@ -34,4 +49,17 @@ export function getSettings(): Settings {
 
 export function saveSettings(s: Settings): void {
   localStorage.setItem(KEYS.SETTINGS, JSON.stringify(s));
+}
+
+export function exportBackup(): string {
+  return JSON.stringify({ entries: getEntries(), settings: getSettings() }, null, 2);
+}
+
+// Replaces all data with the backup's contents. Returns the number of entries restored.
+export function importBackup(json: string): number {
+  const data = JSON.parse(json);
+  if (!Array.isArray(data.entries)) throw new Error('Not a valid backup file');
+  localStorage.setItem(KEYS.ENTRIES, JSON.stringify(data.entries));
+  if (data.settings) localStorage.setItem(KEYS.SETTINGS, JSON.stringify(data.settings));
+  return data.entries.length;
 }

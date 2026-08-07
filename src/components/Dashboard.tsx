@@ -1,10 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Category, CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS, Settings, DEFAULT_SETTINGS } from '../types'
-import { getEntriesForDate, getSettings } from '../storage'
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10)
-}
+import { getEntriesForDate, getSettings, getBalance } from '../storage'
+import { todayStr } from '../dates'
 
 function formatDate(s: string) {
   const [y, m, d] = s.split('-').map(Number)
@@ -14,13 +11,15 @@ function formatDate(s: string) {
 type Props = {
   onAddExpense: (cat: Category) => void
   onHistory: () => void
+  onMonth: () => void
   onSettings: () => void
 }
 
-export default function Dashboard({ onAddExpense, onHistory, onSettings }: Props) {
+export default function Dashboard({ onAddExpense, onHistory, onMonth, onSettings }: Props) {
   const today = todayStr()
   const [spent, setSpent] = useState<Record<Category, number>>({ food: 0, groceries: 0, dogs: 0, miscellaneous: 0 })
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
+  const [balance, setBalance] = useState<number | null>(null)
 
   const load = useCallback(() => {
     const entries = getEntriesForDate(today)
@@ -28,6 +27,7 @@ export default function Dashboard({ onAddExpense, onHistory, onSettings }: Props
     entries.forEach(e => { totals[e.category] += e.amount })
     setSpent(totals)
     setSettings(getSettings())
+    setBalance(getBalance())
   }, [today])
 
   useEffect(() => { load() }, [load])
@@ -41,6 +41,14 @@ export default function Dashboard({ onAddExpense, onHistory, onSettings }: Props
       {/* Header */}
       <div style={{ background: '#1a1a2e', padding: '16px 16px 20px', color: '#fff' }}>
         <div style={{ fontSize: 13, color: '#aaa', marginBottom: 12 }}>{formatDate(today)}</div>
+        {balance !== null && (
+          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: 1 }}>Money left</div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: balance < 0 ? '#e74c3c' : '#fff', marginTop: 2 }}>
+              ฿{balance.toLocaleString()}
+            </div>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 0 }}>
           {[['Budget', `฿${totalBudget.toLocaleString()}`, '#fff'],
             ['Spent', `฿${totalSpent.toLocaleString()}`, totalSpent > totalBudget ? '#e74c3c' : '#2ecc71'],
@@ -106,7 +114,7 @@ export default function Dashboard({ onAddExpense, onHistory, onSettings }: Props
 
       {/* Bottom nav */}
       <div style={{ display: 'flex', gap: 12, padding: '0 12px 32px' }}>
-        {[['History', onHistory], ['Settings', onSettings]].map(([label, fn]) => (
+        {[['This Month', onMonth], ['History', onHistory], ['Settings', onSettings]].map(([label, fn]) => (
           <button
             key={label as string}
             onClick={fn as () => void}

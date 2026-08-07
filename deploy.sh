@@ -1,16 +1,16 @@
 #!/bin/bash
+# Deploy the PWA: pull latest, rebuild dist/. busybox httpd serves dist/ live,
+# so no service restart is needed. Run from anywhere — locally it just SSHes in.
 set -e
-cd /home/exedev/budget-app
-echo "==> Building..."
-go build -o /home/exedev/srv ./cmd/srv
-echo "==> Restarting service..."
-sudo systemctl restart srv
-sleep 1
-if systemctl is-active --quiet srv; then
-  echo "==> ✅ Deployed successfully!"
-  echo "    https://budget-app.exe.xyz/"
-else
-  echo "==> ❌ Service failed to start"
-  journalctl -u srv --no-pager -n 10
-  exit 1
+
+if [ "$(hostname)" != "budget-app" ]; then
+  echo "==> Running deploy on the VM..."
+  exec ssh exedev@budget-app.exe.xyz 'cd /home/exedev/budget-app && git pull --ff-only && ./deploy.sh'
 fi
+
+cd /home/exedev/budget-app
+echo "==> Installing deps..."
+npm ci --no-audit --no-fund
+echo "==> Building..."
+npm run build
+echo "==> ✅ Deployed — https://budget-app.exe.xyz/"

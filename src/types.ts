@@ -29,16 +29,21 @@ export type Entry = {
   category: Category;
   amount: number;
   note?: string;
+  ts?: number; // epoch ms when logged (older entries may lack it; id prefix is the fallback)
+};
+
+// "I have ฿X as of this moment" — expenses logged after ts count down from amount
+export type BalanceAnchor = {
+  amount: number;
+  ts: number;
 };
 
 export type Settings = {
   dailyBudgets: Record<Category, number>;
-  googleClientId: string;
-  sheetId: string;
+  balanceAnchor: BalanceAnchor | null;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
   dailyBudgets: DEFAULT_DAILY_BUDGETS,
-  googleClientId: '',
-  sheetId: '1opcqms60Ts7LfS7qz4WQsQMUO9Yx6nSXM_4dB_lMDzE',
+  balanceAnchor: null,
 };

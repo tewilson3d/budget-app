@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { CATEGORIES, CATEGORY_LABELS, Category, Settings } from '../types'
-import { getSettings, saveSettings } from '../storage'
-import { isAuthenticated, startGoogleAuth, clearAccessToken, getAccessToken } from '../auth'
-import { syncToSheet } from '../sheets'
-import { getEntriesForMonth } from '../storage'
+import { getSettings, saveSettings, getBalance, getEntries, exportBackup, importBackup } from '../storage'
+import { todayStr } from '../dates'
 
-function currentYearMonth() {
-  return new Date().toISOString().slice(0, 7)
+function download(content: string, filename: string, mime: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: mime }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 type Props = { onBack: () => void }
@@ -17,9 +20,15 @@ export default function SettingsPage({ onBack }: Props) {
     const s = getSettings()
     return { food: String(s.dailyBudgets.food), groceries: String(s.dailyBudgets.groceries), dogs: String(s.dailyBudgets.dogs), miscellaneous: String(s.dailyBudgets.miscellaneous) }
   })
-  const [authed, setAuthed] = useState(isAuthenticated)
-  const [syncing, setSyncing] = useState(false)
-  const [syncMsg, setSyncMsg] = useState('')
+  const [msg, setMsg] = useState('')
+  const [balance, setBalance] = useState<number | null>(getBalance)
+  const [balanceInput, setBalanceInput] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  const flash = (text: string) => {
+    setMsg(text)
+    setTimeout(() => setMsg(''), 2500)
+  }
 
   const handleSave = () => {
     const updated: Settings = {
@@ -33,32 +42,56 @@ export default function SettingsPage({ onBack }: Props) {
     }
     saveSettings(updated)
     setSettings(updated)
-    setSyncMsg('Settings saved.')
-    setTimeout(() => setSyncMsg(''), 2000)
+    flash('Settings saved.')
   }
 
-  const handleConnect = () => {
-    if (!settings.googleClientId) {
-      alert('Paste your Google Client ID first.')
-      return
+  const handleSetBalance = () => {
+    const num = parseFloat(balanceInput)
+    if (isNaN(num)) return
+    const updated: Settings = { ...getSettings(), balanceAnchor: { amount: num, ts: Date.now() } }
+    saveSettings(updated)
+    setSettings(updated)
+    setBalance(getBalance())
+    setBalanceInput('')
+    flash('Balance set.')
+  }
+
+  const handleClearBalance = () => {
+    if (!confirm('Stop tracking wallet balance?')) return
+    const updated: Settings = { ...getSettings(), balanceAnchor: null }
+    saveSettings(updated)
+    setSettings(updated)
+    setBalance(null)
+  }
+
+  const handleExportCsv = () => {
+    const rows = [
+      ['date', 'category', 'amount', 'note'],
+      ...getEntries().map(e => [e.date, e.category, String(e.amount), e.note ?? '']),
+    ]
+    const csv = rows
+      .map(r => r.map(v => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v).join(','))
+      .join('\n')
+    download(csv, `expenses-${todayStr()}.csv`, 'text/csv')
+    flash('CSV exported.')
+  }
+
+  const handleDownloadBackup = () => {
+    download(exportBackup(), `budget-backup-${todayStr()}.json`, 'application/json')
+    flash('Backup downloaded.')
+  }
+
+  const handleRestoreFile = async (file: File) => {
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text)
+      const count = Array.isArray(data.entries) ? data.entries.length : 0
+      if (!confirm(`Replace ALL current data with this backup (${count} entries)?`)) return
+      importBackup(text)
+      window.location.reload()
+    } catch {
+      alert('That file is not a valid backup.')
     }
-    startGoogleAuth(settings.googleClientId, window.location.origin + '/')
-  }
-
-  const handleDisconnect = () => {
-    clearAccessToken()
-    setAuthed(false)
-  }
-
-  const handleSync = async () => {
-    const token = getAccessToken()
-    if (!token) { alert('Connect Google account first.'); return }
-    setSyncing(true)
-    setSyncMsg('')
-    const entries = getEntriesForMonth(currentYearMonth())
-    const result = await syncToSheet(settings.sheetId, token, entries)
-    setSyncing(false)
-    setSyncMsg(result.errors ? `⚠ ${result.errors} errors` : `✓ ${result.synced} cells synced`)
   }
 
   return (
@@ -69,6 +102,35 @@ export default function SettingsPage({ onBack }: Props) {
       </div>
 
       <div style={{ padding: 16 }}>
+        {/* Wallet balance */}
+        <div style={sectionLabel}>Wallet Balance (฿)</div>
+        <p style={{ fontSize: 13, color: '#888', marginBottom: 10 }}>
+          Enter how much money you have right now. Every expense you log from then on counts down from it.
+        </p>
+        {balance !== null && (
+          <div style={{ background: '#fff', borderRadius: 10, padding: '12px 14px', marginBottom: 8, display: 'flex', alignItems: 'center' }}>
+            <span style={{ flex: 1, fontWeight: 600, fontSize: 15 }}>Current balance</span>
+            <span style={{ fontWeight: 800, fontSize: 18, color: balance < 0 ? '#e74c3c' : '#27ae60' }}>฿{balance.toLocaleString()}</span>
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <input
+            type="number"
+            value={balanceInput}
+            onChange={e => setBalanceInput(e.target.value)}
+            placeholder={balance !== null ? 'New balance…' : 'e.g. 80000'}
+            style={{ flex: 1, border: '1px solid #ddd', borderRadius: 10, padding: '12px 14px', fontSize: 15, background: '#fff' }}
+          />
+          <button onClick={handleSetBalance} disabled={!balanceInput} style={{ ...btn, width: 'auto', padding: '0 20px', background: '#27ae60', opacity: balanceInput ? 1 : 0.5 }}>
+            Set
+          </button>
+        </div>
+        {balance !== null && (
+          <button onClick={handleClearBalance} style={{ background: 'none', border: 'none', color: '#e74c3c', fontSize: 13, padding: '4px 0', marginBottom: 8 }}>
+            Stop tracking balance
+          </button>
+        )}
+
         {/* Daily budgets */}
         <div style={sectionLabel}>Daily Budgets (฿)</div>
         {CATEGORIES.map(cat => (
@@ -82,43 +144,37 @@ export default function SettingsPage({ onBack }: Props) {
             />
           </div>
         ))}
-
-        {/* Google Sheets */}
-        <div style={sectionLabel}>Google Sheets Sync</div>
-        <p style={{ fontSize: 13, color: '#888', marginBottom: 10 }}>Paste your OAuth Client ID (Web application type) from Google Cloud Console.</p>
-        <input
-          type="text"
-          value={settings.googleClientId}
-          onChange={e => setSettings(s => ({ ...s, googleClientId: e.target.value }))}
-          placeholder="...apps.googleusercontent.com"
-          style={{ width: '100%', border: '1px solid #ddd', borderRadius: 10, padding: '12px 14px', fontSize: 14, marginBottom: 12, background: '#fff' }}
-        />
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <div style={{ width: 10, height: 10, borderRadius: 5, background: authed ? '#2ecc71' : '#e74c3c' }} />
-          <span style={{ fontSize: 14, color: '#555' }}>{authed ? 'Connected to Google' : 'Not connected'}</span>
-        </div>
-
-        {authed ? (
-          <>
-            <button onClick={handleSync} disabled={syncing} style={{ ...btn, background: '#27ae60', marginBottom: 8 }}>
-              {syncing ? 'Syncing…' : 'Sync This Month to Sheet'}
-            </button>
-            <button onClick={handleDisconnect} style={{ ...btn, background: '#e74c3c', marginBottom: 8 }}>
-              Disconnect Google Account
-            </button>
-          </>
-        ) : (
-          <button onClick={handleConnect} style={{ ...btn, background: '#4285F4', marginBottom: 8 }}>
-            Connect Google Account
-          </button>
-        )}
-
-        {syncMsg && <div style={{ textAlign: 'center', fontSize: 14, color: '#555', marginBottom: 8 }}>{syncMsg}</div>}
-
-        <button onClick={handleSave} style={{ ...btn, background: '#1a1a2e', marginTop: 8, marginBottom: 40 }}>
+        <button onClick={handleSave} style={{ ...btn, background: '#1a1a2e', marginTop: 8 }}>
           Save Settings
         </button>
+
+        {/* Backup */}
+        <div style={sectionLabel}>Backup &amp; Export</div>
+        <p style={{ fontSize: 13, color: '#888', marginBottom: 10 }}>
+          All data lives on this phone. Download a backup now and then so you can restore it on a new device.
+        </p>
+        <button onClick={handleExportCsv} style={{ ...btn, background: '#2980b9', marginBottom: 8 }}>
+          Export Expenses (CSV)
+        </button>
+        <button onClick={handleDownloadBackup} style={{ ...btn, background: '#27ae60', marginBottom: 8 }}>
+          Download Backup (JSON)
+        </button>
+        <button onClick={() => fileInput.current?.click()} style={{ ...btn, background: '#8e44ad', marginBottom: 8 }}>
+          Restore from Backup…
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: 'none' }}
+          onChange={e => {
+            const f = e.target.files?.[0]
+            if (f) handleRestoreFile(f)
+            e.target.value = ''
+          }}
+        />
+
+        {msg && <div style={{ textAlign: 'center', fontSize: 14, color: '#555', margin: '8px 0 40px' }}>{msg}</div>}
       </div>
     </div>
   )

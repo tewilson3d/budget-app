@@ -8,6 +8,7 @@ if [ "$(hostname)" != "budget-app" ]; then
   exec ssh exedev@budget-app.exe.xyz 'cd /home/exedev/budget-app && git pull --ff-only && ./deploy.sh'
 fi
 
+PATH="$HOME/.local/bin:$PATH"  # node/npm live here; not set for non-interactive ssh
 cd /home/exedev/budget-app
 echo "==> Installing deps..."
 npm ci --no-audit --no-fund

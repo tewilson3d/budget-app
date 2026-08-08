@@ -1,5 +1,5 @@
 import { CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS, Category } from '../types'
-import { getEntriesForMonth, getSettings } from '../storage'
+import { getEntriesForMonth, getSettings, getPaymentsForMonth } from '../storage'
 import { currentYearMonth } from '../dates'
 
 type Props = { onBack: () => void }
@@ -13,6 +13,9 @@ export default function MonthPage({ onBack }: Props) {
 
   const settings = getSettings()
   const entries = getEntriesForMonth(yearMonth)
+  const billsDue = settings.bills.reduce((s, b) => s + b.amount, 0)
+  const paidPayments = getPaymentsForMonth(yearMonth)
+  const billsPaid = paidPayments.reduce((s, p) => s + p.amount, 0)
   const spent: Record<Category, number> = { food: 0, groceries: 0, dogs: 0, miscellaneous: 0 }
   entries.forEach(e => { spent[e.category] += e.amount })
 
@@ -96,6 +99,30 @@ export default function MonthPage({ onBack }: Props) {
             </div>
           )
         })}
+
+        {/* Fixed bills summary */}
+        <div style={{ background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
+          <div style={{ height: 4, background: '#1a1a2e' }} />
+          <div style={{ padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>Fixed Bills</span>
+              <span style={{ fontSize: 12, color: '#888' }}>{paidPayments.length} of {settings.bills.length} paid</span>
+            </div>
+            <div style={{ height: 6, background: '#eee', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
+              <div style={{ height: '100%', width: `${billsDue > 0 ? Math.min(billsPaid / billsDue, 1) * 100 : 0}%`, background: '#27ae60', borderRadius: 3 }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase' }}>Paid</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#222' }}>฿{billsPaid.toLocaleString()}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase' }}>Due monthly</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#555' }}>฿{billsDue.toLocaleString()}</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

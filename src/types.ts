@@ -38,12 +38,33 @@ export type BalanceAnchor = {
   ts: number;
 };
 
+// Fixed monthly bill (utilities, internet, …) — checked off once per month
+export type Bill = {
+  id: string;
+  name: string;
+  amount: number; // THB
+};
+
+// Amounts from the Financial Runway Tracker sheet's Year Summary.
+// USD subscriptions converted at the sheet's 33.5 THB/USD rate.
+export const DEFAULT_BILLS: Bill[] = [
+  { id: 'utilities', name: 'Utilities', amount: 6000 },
+  { id: 'phone', name: 'Phone', amount: 1500 },
+  { id: 'internet', name: 'Internet', amount: 1000 },
+  { id: 'water', name: 'Water', amount: 200 },
+  { id: 'cleaning', name: 'Cleaning', amount: 2300 },
+  { id: 'spotify', name: 'Spotify ($12)', amount: 402 },
+  { id: 'openai', name: 'OpenAI ($20)', amount: 670 },
+];
+
 export type Settings = {
   dailyBudgets: Record<Category, number>;
   balanceAnchor: BalanceAnchor | null;
+  bills: Bill[];
 };
 
 export const DEFAULT_SETTINGS: Settings = {
   dailyBudgets: DEFAULT_DAILY_BUDGETS,
   balanceAnchor: null,
+  bills: DEFAULT_BILLS,
 };

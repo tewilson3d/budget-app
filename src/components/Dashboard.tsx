@@ -12,10 +12,11 @@ type Props = {
   onAddExpense: (cat: Category) => void
   onHistory: () => void
   onMonth: () => void
+  onBills: () => void
   onSettings: () => void
 }
 
-export default function Dashboard({ onAddExpense, onHistory, onMonth, onSettings }: Props) {
+export default function Dashboard({ onAddExpense, onHistory, onMonth, onBills, onSettings }: Props) {
   const today = todayStr()
   const [spent, setSpent] = useState<Record<Category, number>>({ food: 0, groceries: 0, dogs: 0, miscellaneous: 0 })
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
@@ -113,12 +114,12 @@ export default function Dashboard({ onAddExpense, onHistory, onMonth, onSettings
       </div>
 
       {/* Bottom nav */}
-      <div style={{ display: 'flex', gap: 12, padding: '0 12px 32px' }}>
-        {[['This Month', onMonth], ['History', onHistory], ['Settings', onSettings]].map(([label, fn]) => (
+      <div style={{ display: 'flex', gap: 10, padding: '0 12px 32px' }}>
+        {[['Month', onMonth], ['Bills', onBills], ['History', onHistory], ['Settings', onSettings]].map(([label, fn]) => (
           <button
             key={label as string}
             onClick={fn as () => void}
-            style={{ flex: 1, background: '#fff', border: 'none', borderRadius: 12, padding: '14px 0', fontWeight: 600, fontSize: 15, color: '#1a1a2e', boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}
+            style={{ flex: 1, background: '#fff', border: 'none', borderRadius: 12, padding: '14px 0', fontWeight: 600, fontSize: 14, color: '#1a1a2e', boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}
           >
             {label as string}
           </button>

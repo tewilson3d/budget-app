@@ -42,14 +42,30 @@ export default function Dashboard({ onAddExpense, onHistory, onMonth, onBills, o
       {/* Header */}
       <div style={{ background: '#1a1a2e', padding: '16px 16px 20px', color: '#fff' }}>
         <div style={{ fontSize: 13, color: '#aaa', marginBottom: 12 }}>{formatDate(today)}</div>
-        {balance !== null && (
-          <div style={{ textAlign: 'center', marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: 1 }}>Money left</div>
-            <div style={{ fontSize: 36, fontWeight: 800, color: balance < 0 ? '#e74c3c' : '#fff', marginTop: 2 }}>
-              ฿{balance.toLocaleString()}
+        {balance !== null && (() => {
+          // Planned monthly burn: daily budgets over an average month + fixed bills
+          const monthlyBurn = CATEGORIES.reduce((s, c) => s + settings.dailyBudgets[c], 0) * 30.44
+            + settings.bills.reduce((s, b) => s + b.amount, 0)
+          const runway = monthlyBurn > 0 ? Math.max(balance / monthlyBurn, 0) : null
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ flex: 1.4, textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: 1 }}>Money left</div>
+                <div style={{ fontSize: 34, fontWeight: 800, color: balance < 0 ? '#e74c3c' : '#fff', marginTop: 2 }}>
+                  ฿{balance.toLocaleString()}
+                </div>
+              </div>
+              {runway !== null && (
+                <div style={{ flex: 1, textAlign: 'center', borderLeft: '1px solid #333' }}>
+                  <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: 1 }}>Runway</div>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: runway < 1 ? '#e74c3c' : runway < 2 ? '#f39c12' : '#2ecc71', marginTop: 4 }}>
+                    {runway.toFixed(1)}<span style={{ fontSize: 14, fontWeight: 600, color: '#888' }}> mo</span>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )
+        })()}
         <div style={{ display: 'flex', gap: 0 }}>
           {[['Budget', `฿${totalBudget.toLocaleString()}`, '#fff'],
             ['Spent', `฿${totalSpent.toLocaleString()}`, totalSpent > totalBudget ? '#e74c3c' : '#2ecc71'],

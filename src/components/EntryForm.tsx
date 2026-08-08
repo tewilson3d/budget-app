@@ -3,8 +3,6 @@ import { Category, CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS } from '../types
 import { saveEntry } from '../storage'
 import { todayStr } from '../dates'
 
-const QUICK = [100, 200, 500, 1000, 1500, 2000]
-
 type Props = { initialCategory: Category; onBack: () => void }
 
 export default function EntryForm({ initialCategory, onBack }: Props) {
@@ -61,22 +59,22 @@ export default function EntryForm({ initialCategory, onBack }: Props) {
             value={amount}
             onChange={e => setAmount(e.target.value)}
             placeholder="0"
-            style={{ flex: 1, border: 'none', fontSize: 36, fontWeight: 800, color: '#222', background: 'transparent' }}
+            style={{ flex: 1, minWidth: 0, border: 'none', fontSize: 36, fontWeight: 800, color: '#222', background: 'transparent' }}
           />
         </div>
 
-        {/* Quick amounts */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
-          {QUICK.map(q => (
-            <button
-              key={q}
-              onClick={() => setAmount(String(q))}
-              style={{ border: `1.5px solid ${color}`, borderRadius: 8, padding: '6px 12px', background: '#fff', color, fontWeight: 600, fontSize: 13 }}
-            >
-              ฿{q.toLocaleString()}
-            </button>
-          ))}
-        </div>
+        <button
+          onClick={handleSave}
+          disabled={!amount || parseFloat(amount) <= 0}
+          style={{
+            width: '100%', background: color, color: '#fff', border: 'none',
+            borderRadius: 14, padding: '16px 0', fontWeight: 800, fontSize: 17,
+            opacity: (!amount || parseFloat(amount) <= 0) ? 0.5 : 1,
+            marginBottom: 24,
+          }}
+        >
+          Save Expense
+        </button>
 
         {/* Note */}
         <div style={{ fontSize: 12, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Note (optional)</div>
@@ -88,17 +86,6 @@ export default function EntryForm({ initialCategory, onBack }: Props) {
           style={{ width: '100%', background: '#fff', border: '1px solid #ddd', borderRadius: 12, padding: 14, fontSize: 15, color: '#333', marginBottom: 32 }}
         />
 
-        <button
-          onClick={handleSave}
-          disabled={!amount || parseFloat(amount) <= 0}
-          style={{
-            width: '100%', background: color, color: '#fff', border: 'none',
-            borderRadius: 14, padding: '16px 0', fontWeight: 800, fontSize: 17,
-            opacity: (!amount || parseFloat(amount) <= 0) ? 0.5 : 1,
-          }}
-        >
-          Save Expense
-        </button>
       </div>
     </div>
   )

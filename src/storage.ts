@@ -76,6 +76,30 @@ export function getBalance(): number | null {
   return anchor.amount - spentSince - billsSince;
 }
 
+export type Pace = {
+  perDay: number;        // actual average daily spend (logged expenses only)
+  days: number;          // days the average covers
+  fromBudget: boolean;   // true when too little history, so the budget was used
+};
+
+// How fast money actually leaves: average logged spend per day over the last
+// 30 days (or since the balance was set, if more recent). Falls back to the
+// daily budget total when there are fewer than 3 days of data.
+export function getPace(): Pace {
+  const settings = getSettings();
+  const now = Date.now();
+  const dayMs = 86400000;
+  const anchorTs = settings.balanceAnchor?.ts ?? 0;
+  const start = Math.max(now - 30 * dayMs, anchorTs);
+  const days = Math.max((now - start) / dayMs, 0);
+  const budgetPerDay = Object.values(settings.dailyBudgets).reduce((a, b) => a + b, 0);
+  if (days < 3) return { perDay: budgetPerDay, days, fromBudget: true };
+  const spent = getEntries()
+    .filter(e => entryTs(e) >= start)
+    .reduce((sum, e) => sum + e.amount, 0);
+  return { perDay: spent / days, days, fromBudget: false };
+}
+
 export function getSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEYS.SETTINGS);

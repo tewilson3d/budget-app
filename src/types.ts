@@ -1,11 +1,13 @@
-export type Category = 'food' | 'groceries' | 'dogs' | 'miscellaneous';
+export type Category = 'food' | 'groceries' | 'dogs' | 'automotive' | 'household' | 'miscellaneous';
 
-export const CATEGORIES: Category[] = ['food', 'groceries', 'dogs', 'miscellaneous'];
+export const CATEGORIES: Category[] = ['food', 'groceries', 'dogs', 'automotive', 'household', 'miscellaneous'];
 
 export const CATEGORY_LABELS: Record<Category, string> = {
   food: 'Food',
   groceries: 'Groceries',
   dogs: 'Dogs',
+  automotive: 'Automotive',
+  household: 'Household',
   miscellaneous: 'Miscellaneous',
 };
 
@@ -13,15 +15,36 @@ export const CATEGORY_COLORS: Record<Category, string> = {
   food: '#e67e22',
   groceries: '#27ae60',
   dogs: '#8e44ad',
+  automotive: '#00897b',
+  household: '#d81b60',
   miscellaneous: '#2980b9',
 };
 
+export type BudgetPeriod = 'daily' | 'monthly';
+
+export const CATEGORY_BUDGET_PERIODS: Record<Category, BudgetPeriod> = {
+  food: 'daily',
+  groceries: 'monthly',
+  dogs: 'monthly',
+  automotive: 'monthly',
+  household: 'monthly',
+  miscellaneous: 'monthly',
+};
+
+// Food is a daily amount. Every other category is a monthly amount.
+// The legacy property name is retained so existing on-device settings/backups continue to work.
 export const DEFAULT_DAILY_BUDGETS: Record<Category, number> = {
   food: 1500,
   groceries: 500,
   dogs: 53,
+  automotive: 0,
+  household: 0,
   miscellaneous: 833,
 };
+
+export function emptyCategoryAmounts(): Record<Category, number> {
+  return Object.fromEntries(CATEGORIES.map(category => [category, 0])) as Record<Category, number>;
+}
 
 export type Entry = {
   id: string;

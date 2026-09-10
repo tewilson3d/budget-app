@@ -1,4 +1,4 @@
-import { Entry, Settings, Bill, DEFAULT_SETTINGS } from './types';
+import { Entry, Settings, Bill, DEFAULT_SETTINGS, CATEGORIES, CATEGORY_BUDGET_PERIODS } from './types';
 
 const KEYS = { ENTRIES: 'budget_entries', SETTINGS: 'budget_settings', PAYMENTS: 'budget_bill_payments' };
 
@@ -92,7 +92,10 @@ export function getPace(): Pace {
   const anchorTs = settings.balanceAnchor?.ts ?? 0;
   const start = Math.max(now - 30 * dayMs, anchorTs);
   const days = Math.max((now - start) / dayMs, 0);
-  const budgetPerDay = Object.values(settings.dailyBudgets).reduce((a, b) => a + b, 0);
+  const budgetPerDay = CATEGORIES.reduce((total, category) => {
+    const amount = settings.dailyBudgets[category];
+    return total + (CATEGORY_BUDGET_PERIODS[category] === 'daily' ? amount : amount / 30.44);
+  }, 0);
   if (days < 3) return { perDay: budgetPerDay, days, fromBudget: true };
   const spent = getEntries()
     .filter(e => entryTs(e) >= start)
@@ -103,7 +106,17 @@ export function getPace(): Pace {
 export function getSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEYS.SETTINGS);
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
+    if (!raw) return DEFAULT_SETTINGS;
+    const saved = JSON.parse(raw) as Partial<Settings>;
+    return {
+      ...DEFAULT_SETTINGS,
+      ...saved,
+      dailyBudgets: {
+        ...DEFAULT_SETTINGS.dailyBudgets,
+        ...(saved.dailyBudgets ?? {}),
+      },
+      bills: Array.isArray(saved.bills) ? saved.bills : DEFAULT_SETTINGS.bills,
+    };
   } catch { return DEFAULT_SETTINGS; }
 }
 

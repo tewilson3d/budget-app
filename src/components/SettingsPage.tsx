@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { CATEGORIES, CATEGORY_LABELS, Category, Settings } from '../types'
+import { CATEGORIES, CATEGORY_LABELS, CATEGORY_BUDGET_PERIODS, Category, Settings } from '../types'
 import { getSettings, saveSettings, getBalance, getEntries, exportBackup, importBackup } from '../storage'
 import { todayStr } from '../dates'
 
@@ -18,7 +18,7 @@ export default function SettingsPage({ onBack }: Props) {
   const [settings, setSettings] = useState<Settings>(getSettings)
   const [budgets, setBudgets] = useState<Record<Category, string>>(() => {
     const s = getSettings()
-    return { food: String(s.dailyBudgets.food), groceries: String(s.dailyBudgets.groceries), dogs: String(s.dailyBudgets.dogs), miscellaneous: String(s.dailyBudgets.miscellaneous) }
+    return Object.fromEntries(CATEGORIES.map(category => [category, String(s.dailyBudgets[category])])) as Record<Category, string>
   })
   const [msg, setMsg] = useState('')
   const [balance, setBalance] = useState<number | null>(getBalance)
@@ -33,12 +33,9 @@ export default function SettingsPage({ onBack }: Props) {
   const handleSave = () => {
     const updated: Settings = {
       ...settings,
-      dailyBudgets: {
-        food: parseFloat(budgets.food) || 0,
-        groceries: parseFloat(budgets.groceries) || 0,
-        dogs: parseFloat(budgets.dogs) || 0,
-        miscellaneous: parseFloat(budgets.miscellaneous) || 0,
-      }
+      dailyBudgets: Object.fromEntries(
+        CATEGORIES.map(category => [category, parseFloat(budgets[category]) || 0])
+      ) as Record<Category, number>
     }
     saveSettings(updated)
     setSettings(updated)
@@ -131,11 +128,19 @@ export default function SettingsPage({ onBack }: Props) {
           </button>
         )}
 
-        {/* Daily budgets */}
-        <div style={sectionLabel}>Daily Budgets (฿)</div>
+        {/* Category budgets */}
+        <div style={sectionLabel}>Category Budgets (฿)</div>
+        <p style={{ fontSize: 13, color: '#888', marginBottom: 10 }}>
+          Food is a daily budget. Every other category is a monthly budget.
+        </p>
         {CATEGORIES.map(cat => (
           <div key={cat} style={{ background: '#fff', borderRadius: 10, padding: '12px 14px', marginBottom: 8, display: 'flex', alignItems: 'center' }}>
-            <span style={{ flex: 1, fontWeight: 600, fontSize: 15 }}>{CATEGORY_LABELS[cat]}</span>
+            <span style={{ flex: 1, fontWeight: 600, fontSize: 15 }}>
+              {CATEGORY_LABELS[cat]}
+              <span style={{ display: 'block', color: '#999', fontSize: 11, fontWeight: 500, textTransform: 'uppercase', marginTop: 2 }}>
+                {CATEGORY_BUDGET_PERIODS[cat]}
+              </span>
+            </span>
             <input
               type="number"
               value={budgets[cat]}

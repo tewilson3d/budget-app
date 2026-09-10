@@ -1,8 +1,10 @@
-import { CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS, Category } from '../types'
+import { CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS, CATEGORY_BUDGET_PERIODS, Category, emptyCategoryAmounts } from '../types'
 import { getEntriesForMonth, getSettings, getPaymentsForMonth } from '../storage'
 import { currentYearMonth } from '../dates'
 
 type Props = { onBack: () => void }
+
+const formatAmount = (amount: number) => Math.round(amount).toLocaleString()
 
 export default function MonthPage({ onBack }: Props) {
   const now = new Date()
@@ -16,12 +18,16 @@ export default function MonthPage({ onBack }: Props) {
   const billsDue = settings.bills.reduce((s, b) => s + b.amount, 0)
   const paidPayments = getPaymentsForMonth(yearMonth)
   const billsPaid = paidPayments.reduce((s, p) => s + p.amount, 0)
-  const spent: Record<Category, number> = { food: 0, groceries: 0, dogs: 0, miscellaneous: 0 }
-  entries.forEach(e => { spent[e.category] += e.amount })
+  const spent: Record<Category, number> = emptyCategoryAmounts()
+  entries.forEach(e => {
+    if (e.category in spent) spent[e.category] += e.amount
+  })
 
-  const totalTarget = CATEGORIES.reduce((s, c) => s + settings.dailyBudgets[c] * daysInMonth, 0)
+  const monthTarget = (category: Category) => settings.dailyBudgets[category] * (CATEGORY_BUDGET_PERIODS[category] === 'daily' ? daysInMonth : 1)
+  const paceTarget = (category: Category) => settings.dailyBudgets[category] * (CATEGORY_BUDGET_PERIODS[category] === 'daily' ? dayOfMonth : dayOfMonth / daysInMonth)
+  const totalTarget = CATEGORIES.reduce((s, c) => s + monthTarget(c), 0)
   const totalSpent = CATEGORIES.reduce((s, c) => s + spent[c], 0)
-  const totalPace = CATEGORIES.reduce((s, c) => s + settings.dailyBudgets[c] * dayOfMonth, 0)
+  const totalPace = CATEGORIES.reduce((s, c) => s + paceTarget(c), 0)
   const paceDiff = totalPace - totalSpent
 
   return (
@@ -54,9 +60,10 @@ export default function MonthPage({ onBack }: Props) {
       {/* Per-category month cards */}
       <div style={{ padding: '12px 12px 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {CATEGORIES.map(cat => {
-          const daily = settings.dailyBudgets[cat]
-          const target = daily * daysInMonth
-          const pace = daily * dayOfMonth
+          const budget = settings.dailyBudgets[cat]
+          const period = CATEGORY_BUDGET_PERIODS[cat]
+          const target = monthTarget(cat)
+          const pace = paceTarget(cat)
           const amount = spent[cat]
           const diff = pace - amount
           const over = amount > target
@@ -70,7 +77,7 @@ export default function MonthPage({ onBack }: Props) {
               <div style={{ padding: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
                   <span style={{ fontWeight: 700, fontSize: 16 }}>{CATEGORY_LABELS[cat]}</span>
-                  <span style={{ fontSize: 12, color: '#888' }}>฿{daily.toLocaleString()}/day</span>
+                  <span style={{ fontSize: 12, color: '#888' }}>฿{budget.toLocaleString()}/{period === 'daily' ? 'day' : 'month'}</span>
                 </div>
 
                 {/* Progress bar with pace marker */}
@@ -92,8 +99,8 @@ export default function MonthPage({ onBack }: Props) {
 
                 <div style={{ fontSize: 13, color: diff >= 0 ? '#888' : '#e74c3c' }}>
                   {diff >= 0
-                    ? `฿${diff.toLocaleString()} under pace (expected ฿${pace.toLocaleString()} by today)`
-                    : `฿${(-diff).toLocaleString()} over pace (expected ฿${pace.toLocaleString()} by today)`}
+                    ? `฿${formatAmount(diff)} under pace (expected ฿${formatAmount(pace)} by today)`
+                    : `฿${formatAmount(-diff)} over pace (expected ฿${formatAmount(pace)} by today)`}
                 </div>
               </div>
             </div>

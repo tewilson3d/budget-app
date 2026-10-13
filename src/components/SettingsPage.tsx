@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { CATEGORIES, CATEGORY_LABELS, CATEGORY_BUDGET_PERIODS, Category, Settings } from '../types'
-import { getSettings, saveSettings, getBalance, getEntries, exportBackup, importBackup } from '../storage'
+import { getSettings, saveSettings, getBalance, getEntries, getMonthlyAverages, exportBackup, importBackup } from '../storage'
 import { todayStr } from '../dates'
 
 function download(content: string, filename: string, mime: string) {
@@ -24,6 +24,7 @@ export default function SettingsPage({ onBack }: Props) {
   const [balance, setBalance] = useState<number | null>(getBalance)
   const [balanceInput, setBalanceInput] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
+  const [averages] = useState(getMonthlyAverages)
 
   const flash = (text: string) => {
     setMsg(text)
@@ -40,6 +41,25 @@ export default function SettingsPage({ onBack }: Props) {
     saveSettings(updated)
     setSettings(updated)
     flash('Settings saved.')
+  }
+
+  const handleUseAverages = () => {
+    if (!averages) return
+    const next = { ...budgets }
+    for (const category of CATEGORIES) {
+      const avg = averages.amounts[category]
+      if (avg !== undefined) next[category] = String(avg)
+    }
+    const updated: Settings = {
+      ...settings,
+      dailyBudgets: Object.fromEntries(
+        CATEGORIES.map(category => [category, parseFloat(next[category]) || 0])
+      ) as Record<Category, number>
+    }
+    saveSettings(updated)
+    setSettings(updated)
+    setBudgets(next)
+    flash('Monthly targets set to averages.')
   }
 
   const handleSetBalance = () => {
@@ -139,6 +159,7 @@ export default function SettingsPage({ onBack }: Props) {
               {CATEGORY_LABELS[cat]}
               <span style={{ display: 'block', color: '#999', fontSize: 11, fontWeight: 500, textTransform: 'uppercase', marginTop: 2 }}>
                 {CATEGORY_BUDGET_PERIODS[cat]}
+                {averages?.amounts[cat] !== undefined && ` · avg ฿${averages.amounts[cat]!.toLocaleString()}`}
               </span>
             </span>
             <input
@@ -149,6 +170,11 @@ export default function SettingsPage({ onBack }: Props) {
             />
           </div>
         ))}
+        {averages && (
+          <button onClick={handleUseAverages} style={{ ...btn, background: '#00897b', marginTop: 8 }}>
+            Use Monthly Averages ({averages.months} mo)
+          </button>
+        )}
         <button onClick={handleSave} style={{ ...btn, background: '#1a1a2e', marginTop: 8 }}>
           Save Settings
         </button>

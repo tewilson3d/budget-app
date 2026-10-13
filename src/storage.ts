@@ -1,4 +1,5 @@
-import { Entry, Settings, Bill, DEFAULT_SETTINGS, CATEGORIES, CATEGORY_BUDGET_PERIODS } from './types';
+import { Entry, Settings, Bill, Category, DEFAULT_SETTINGS, CATEGORIES, CATEGORY_BUDGET_PERIODS } from './types';
+import { currentYearMonth } from './dates';
 
 const KEYS = { ENTRIES: 'budget_entries', SETTINGS: 'budget_settings', PAYMENTS: 'budget_bill_payments' };
 
@@ -101,6 +102,34 @@ export function getPace(): Pace {
     .filter(e => entryTs(e) >= start)
     .reduce((sum, e) => sum + e.amount, 0);
   return { perDay: spent / days, days, fromBudget: false };
+}
+
+export type MonthlyAverages = {
+  months: number;                              // complete months the average covers
+  amounts: Partial<Record<Category, number>>;  // monthly categories only, rounded to whole baht
+};
+
+// Average spend per month for each monthly category, over every complete month
+// from the first logged entry up to (not including) the current month. Months
+// with no spend in a category count as zero. Returns null with no complete month yet.
+export function getMonthlyAverages(): MonthlyAverages | null {
+  const entries = getEntries();
+  if (entries.length === 0) return null;
+  const current = currentYearMonth();
+  const first = entries.reduce((min, e) => e.date < min ? e.date : min, entries[0].date).slice(0, 7);
+  const [fy, fm] = first.split('-').map(Number);
+  const [cy, cm] = current.split('-').map(Number);
+  const months = (cy - fy) * 12 + (cm - fm);
+  if (months < 1) return null;
+  const amounts: Partial<Record<Category, number>> = {};
+  for (const category of CATEGORIES) {
+    if (CATEGORY_BUDGET_PERIODS[category] !== 'monthly') continue;
+    const total = entries
+      .filter(e => e.category === category && e.date.slice(0, 7) < current)
+      .reduce((sum, e) => sum + e.amount, 0);
+    amounts[category] = Math.round(total / months);
+  }
+  return { months, amounts };
 }
 
 export function getSettings(): Settings {

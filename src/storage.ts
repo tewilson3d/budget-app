@@ -34,12 +34,18 @@ export function deleteEntry(id: string): void {
   queue({ method: 'DELETE', path: `/api/entries/${encodeURIComponent(id)}` });
 }
 
+// Keep these exceptional Miscellaneous transactions in History, but exclude
+// them from category totals, averages, and spending-pace calculations.
+export function isIgnoredForTracking(entry: Entry): boolean {
+  return entry.category === 'miscellaneous' && (entry.amount === 6200 || entry.amount === 11200);
+}
+
 export function getEntriesForDate(date: string): Entry[] {
-  return getEntries().filter(e => e.date === date);
+  return getEntries().filter(e => e.date === date && !isIgnoredForTracking(e));
 }
 
 export function getEntriesForMonth(yearMonth: string): Entry[] {
-  return getEntries().filter(e => e.date.startsWith(yearMonth));
+  return getEntries().filter(e => e.date.startsWith(yearMonth) && !isIgnoredForTracking(e));
 }
 
 export function getBillPayments(): BillPayment[] {
@@ -110,7 +116,7 @@ export function getPace(): Pace {
   }, 0);
   if (days < 3) return { perDay: budgetPerDay, days, fromBudget: true };
   const spent = getEntries()
-    .filter(e => entryTs(e) >= start)
+    .filter(e => entryTs(e) >= start && !isIgnoredForTracking(e))
     .reduce((sum, e) => sum + e.amount, 0);
   return { perDay: spent / days, days, fromBudget: false };
 }
@@ -132,8 +138,7 @@ export function getMonthlyAverages(): MonthlyAverages | null {
   for (const category of CATEGORIES) {
     if (CATEGORY_BUDGET_PERIODS[category] !== 'monthly') continue;
     const total = entries
-      .filter(e => e.category === category)
-      .filter(e => !(category === 'miscellaneous' && (e.amount === 6200 || e.amount === 11200)))
+      .filter(e => e.category === category && !isIgnoredForTracking(e))
       .reduce((sum, e) => sum + e.amount, 0);
     amounts[category] = Math.round(total / months);
   }

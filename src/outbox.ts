@@ -47,6 +47,13 @@ export function setSyncError(message: string | null): void {
   window.dispatchEvent(new Event(SYNC_ERROR_EVENT));
 }
 
+// exe.dev answers a lapsed login with a redirect to its login page, not a 401.
+// Following it would turn a failed save into an apparent success, so API calls
+// never follow redirects; a redirect or a 401 both mean "log in again".
+export function loggedOut(res: Response): boolean {
+  return res.type === 'opaqueredirect' || res.status === 401 || (res.status >= 300 && res.status < 400);
+}
+
 let redirecting = false;
 
 // The exe.dev login has lapsed: send the user to log in again, once.
@@ -83,11 +90,12 @@ async function sendAll(): Promise<boolean> {
         body: op.body === undefined ? undefined : JSON.stringify(op.body),
         credentials: 'same-origin',
         cache: 'no-store',
+        redirect: 'manual',
       });
     } catch {
       return false; // offline
     }
-    if (res.status === 401) { goToLogin(); return false; }
+    if (loggedOut(res)) { goToLogin(); return false; }
     if (res.status === 403 || res.status === 408 || res.status === 429 || res.status >= 500) return false;
     if (!res.ok) {
       // The server will never accept this one (a 400): drop it so the queue

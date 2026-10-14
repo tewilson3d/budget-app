@@ -1,5 +1,5 @@
 import { applyServerState, localState, SharedState } from './storage';
-import { flush, goToLogin, onFirstImportDone, pendingCount, queue } from './outbox';
+import { flush, goToLogin, loggedOut, onFirstImportDone, pendingCount, queue } from './outbox';
 
 // Keeps this phone's copy in step with the shared budget: send this phone's
 // queued changes, then take the server's copy.
@@ -40,15 +40,16 @@ async function syncOnce(): Promise<void> {
   if (!(await flush())) return; // offline: keep this phone's changes until they're sent
   if (!localStorage.getItem(IMPORTED)) return; // first import was refused; see the sync error
 
-  let res: Response;
+  let state: SharedState;
   try {
-    res = await fetch('/api/state', { credentials: 'same-origin', cache: 'no-store' });
+    const res = await fetch('/api/state', { credentials: 'same-origin', cache: 'no-store', redirect: 'manual' });
+    if (loggedOut(res)) { goToLogin(); return; }
+    if (!res.ok) return;
+    state = (await res.json()) as SharedState;
   } catch {
-    return;
+    return; // offline, or not the JSON we expect
   }
-  if (res.status === 401) { goToLogin(); return; }
-  if (!res.ok) return;
-  const state = (await res.json()) as SharedState;
+  if (!Array.isArray(state?.entries) || !Array.isArray(state?.billPayments)) return;
   if (pendingCount() > 0) return; // changed while loading; the next sync catches up
   if (applyServerState(state)) window.dispatchEvent(new Event(SYNCED_EVENT));
 }

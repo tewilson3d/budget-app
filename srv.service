@@ -1,5 +1,5 @@
 [Unit]
-Description=Budget Tracker (static PWA, Vite/React build)
+Description=Budget Tracker (shared budget: Go server + Vite/React PWA)
 After=network.target
 
 [Service]
@@ -7,7 +7,9 @@ Type=simple
 User=exedev
 Group=exedev
 WorkingDirectory=/home/exedev/budget-app
-ExecStart=/usr/bin/busybox httpd -f -p 8000 -h /home/exedev/budget-app/dist
+# BUDGET_MEMBERS=you@example.com,partner@example.com lives here, outside the repo.
+EnvironmentFile=/home/exedev/budget.env
+ExecStart=/home/exedev/srv -listen :8000 -db /home/exedev/budget.sqlite3 -dist /home/exedev/budget-app/dist
 Restart=always
 RestartSec=5
 StandardOutput=journal

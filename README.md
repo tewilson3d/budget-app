@@ -1,57 +1,55 @@
-# Go Shelley Template
+# Budget Tracker
 
-This is a starter template for building Go web applications on exe.dev. It demonstrates end-to-end usage including HTTP handlers, authentication, database integration, and deployment.
+A shared daily spending tracker: a React PWA (`src/`) backed by a small Go
+server (`srv/`) on exe.dev. Everyone listed in `BUDGET_MEMBERS` logs in with
+exe.dev and works on the same budget ("one pot"): entries, bills, budgets and
+the wallet balance are shared.
 
-Use this as a foundation to build your own service.
+## How data moves
 
-## Building and Running
+- Each phone keeps a copy in localStorage, so the app is instant and works
+  offline. Every change is also queued (`src/outbox.ts`) and sent to the server
+  once it is reachable.
+- `src/sync.ts` sends queued changes, then takes the server's copy: on open,
+  when the app returns to the foreground, and every 30 seconds.
+- The first time a phone runs the shared version it uploads the history it
+  already has (merge only: nothing on the server is overwritten). Until that
+  succeeds the phone never pulls, so no phone can lose history only it holds.
+- The server stores each entry, bill payment and the settings as the PWA's JSON
+  (`db/migrations/003-shared.sql`). Restoring a backup in Settings replaces the
+  shared budget for everyone.
 
-Build with `make build`, then run `./srv`. The server listens on port 8000 by default.
+## Access
 
-## Running as a systemd service
+The site is private on exe.dev and shared with each member
+(`ssh exe.dev share add budget-app <email>`). The server also checks
+`X-ExeDev-Email` against `BUDGET_MEMBERS` and refuses anyone else.
 
-To run the server as a systemd service:
+On the VM, `/home/exedev/budget.env` holds:
 
-```bash
-# Install the service file
-sudo cp srv.service /etc/systemd/system/srv.service
-
-# Reload systemd and enable the service
-sudo systemctl daemon-reload
-sudo systemctl enable srv.service
-
-# Start the service
-sudo systemctl start srv
-
-# Check status
-systemctl status srv
-
-# View logs
-journalctl -u srv -f
+```
+BUDGET_MEMBERS=you@example.com,partner@example.com
 ```
 
-To restart after code changes:
+## Building and running
 
-```bash
-make build
-sudo systemctl restart srv
-```
-
-## Authorization
-
-exe.dev provides authorization headers and login/logout links
-that this template uses.
-
-When proxied through exed, requests will include `X-ExeDev-UserID` and
-`X-ExeDev-Email` if the user is authenticated via exe.dev.
+- Deploy: `./deploy.sh` (from anywhere; it SSHes in, pulls, builds, restarts).
+- Tests: `go test ./...`
+- Local: `npm run build`, then
+  `BUDGET_MEMBERS=you@example.com go run ./cmd/srv -dev-user you@example.com`
+  and open http://localhost:8000. Or run `npm run dev` alongside the Go server;
+  Vite proxies `/api` to it. `-dev-user` stands in for the exe.dev login and must
+  never be used on the VM.
+- Logs on the VM: `journalctl -u srv -f`
 
 ## Database
 
-This template uses sqlite (`db.sqlite3`). SQL queries are managed with sqlc.
+SQLite at `/home/exedev/budget.sqlite3`. Queries are managed with sqlc:
+edit `db/queries/`, then `make db`.
 
 ## Code layout
 
-- `cmd/srv`: main package (binary entrypoint)
-- `srv`: HTTP server logic (handlers)
-- `srv/templates`: Go HTML templates
-- `db`: SQLite open + migrations (001-base.sql)
+- `src/`: the PWA (React + Vite + vite-plugin-pwa)
+- `cmd/srv`: server entrypoint and flags
+- `srv`: HTTP handlers (`server.go`: login check, static files; `api.go`: shared budget API)
+- `db`: SQLite open + migrations, sqlc queries and generated code

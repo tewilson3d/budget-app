@@ -1,4 +1,9 @@
 import { Entry, Settings, Bill, Category, DEFAULT_SETTINGS, CATEGORIES, CATEGORY_BUDGET_PERIODS } from './types';
+import { queue } from './outbox';
+
+// localStorage holds this phone's copy of the shared budget. Reads stay
+// synchronous; each write also queues the same change for the server
+// (outbox.ts), and sync.ts refreshes the copy from the server.
 
 const KEYS = { ENTRIES: 'budget_entries', SETTINGS: 'budget_settings', PAYMENTS: 'budget_bill_payments' };
 
@@ -21,10 +26,12 @@ export function saveEntry(entry: Entry): void {
   const entries = getEntries();
   entries.push(entry);
   localStorage.setItem(KEYS.ENTRIES, JSON.stringify(entries));
+  queue({ method: 'PUT', path: `/api/entries/${encodeURIComponent(entry.id)}`, body: entry });
 }
 
 export function deleteEntry(id: string): void {
   localStorage.setItem(KEYS.ENTRIES, JSON.stringify(getEntries().filter(e => e.id !== id)));
+  queue({ method: 'DELETE', path: `/api/entries/${encodeURIComponent(id)}` });
 }
 
 export function getEntriesForDate(date: string): Entry[] {
@@ -48,13 +55,17 @@ export function getPaymentsForMonth(month: string): BillPayment[] {
 export function toggleBillPaid(bill: Bill, month: string): boolean {
   const payments = getBillPayments();
   const existing = payments.findIndex(p => p.billId === bill.id && p.month === month);
+  const path = `/api/payments/${encodeURIComponent(bill.id)}/${encodeURIComponent(month)}`;
   if (existing >= 0) {
     payments.splice(existing, 1);
     localStorage.setItem(KEYS.PAYMENTS, JSON.stringify(payments));
+    queue({ method: 'DELETE', path });
     return false;
   }
-  payments.push({ billId: bill.id, name: bill.name, amount: bill.amount, month, ts: Date.now() });
+  const payment: BillPayment = { billId: bill.id, name: bill.name, amount: bill.amount, month, ts: Date.now() };
+  payments.push(payment);
   localStorage.setItem(KEYS.PAYMENTS, JSON.stringify(payments));
+  queue({ method: 'PUT', path, body: payment });
   return true;
 }
 
@@ -162,18 +173,54 @@ export function getSettings(): Settings {
 
 export function saveSettings(s: Settings): void {
   localStorage.setItem(KEYS.SETTINGS, JSON.stringify(s));
+  queue({ method: 'PUT', path: '/api/settings', body: s });
 }
 
 export function exportBackup(): string {
   return JSON.stringify({ entries: getEntries(), settings: getSettings(), billPayments: getBillPayments() }, null, 2);
 }
 
-// Replaces all data with the backup's contents. Returns the number of entries restored.
+// Replaces all data with the backup's contents, for both of you: the shared
+// budget becomes exactly the backup. Returns the number of entries restored.
 export function importBackup(json: string): number {
   const data = JSON.parse(json);
   if (!Array.isArray(data.entries)) throw new Error('Not a valid backup file');
+  const billPayments = Array.isArray(data.billPayments) ? data.billPayments : [];
   localStorage.setItem(KEYS.ENTRIES, JSON.stringify(data.entries));
   if (data.settings) localStorage.setItem(KEYS.SETTINGS, JSON.stringify(data.settings));
-  if (Array.isArray(data.billPayments)) localStorage.setItem(KEYS.PAYMENTS, JSON.stringify(data.billPayments));
+  localStorage.setItem(KEYS.PAYMENTS, JSON.stringify(billPayments));
+  queue({ method: 'POST', path: '/api/import', body: { mode: 'replace', entries: data.entries, billPayments, settings: data.settings ?? null } });
   return data.entries.length;
+}
+
+// ---- Server copy (used by sync.ts) ----
+
+export type SharedState = {
+  entries: Entry[];
+  billPayments: BillPayment[];
+  settings: Settings | null;
+};
+
+// What this phone has stored itself, as saved (settings not merged with defaults).
+export function localState(): SharedState {
+  let settings: Settings | null = null;
+  try { settings = JSON.parse(localStorage.getItem(KEYS.SETTINGS) ?? 'null'); } catch { /* unreadable: treat as none */ }
+  return { entries: getEntries(), billPayments: getBillPayments(), settings };
+}
+
+// Makes this phone's copy match the server's. Returns true if anything changed.
+export function applyServerState(state: SharedState): boolean {
+  const next: [string, string | null][] = [
+    [KEYS.ENTRIES, JSON.stringify(state.entries)],
+    [KEYS.PAYMENTS, JSON.stringify(state.billPayments)],
+    [KEYS.SETTINGS, state.settings ? JSON.stringify(state.settings) : null],
+  ];
+  let changed = false;
+  for (const [key, value] of next) {
+    if (localStorage.getItem(key) === value) continue;
+    changed = true;
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  }
+  return changed;
 }

@@ -8,6 +8,14 @@ import (
 	"time"
 )
 
+type BillPayment struct {
+	BillID    string    `json:"bill_id"`
+	Month     string    `json:"month"`
+	Data      string    `json:"data"`
+	CreatedBy string    `json:"created_by"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type Budget struct {
 	UserID   string  `json:"user_id"`
 	Category string  `json:"category"`
@@ -15,10 +23,25 @@ type Budget struct {
 	Amount   float64 `json:"amount"`
 }
 
+type Entry struct {
+	ID        string    `json:"id"`
+	Date      string    `json:"date"`
+	Data      string    `json:"data"`
+	CreatedBy string    `json:"created_by"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type Migration struct {
 	MigrationNumber int64     `json:"migration_number"`
 	MigrationName   string    `json:"migration_name"`
 	ExecutedAt      time.Time `json:"executed_at"`
+}
+
+type Setting struct {
+	ID        int64     `json:"id"`
+	Data      string    `json:"data"`
+	UpdatedBy string    `json:"updated_by"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type Transaction struct {

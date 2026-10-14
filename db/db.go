@@ -19,23 +19,16 @@ import (
 var migrationFS embed.FS
 
 // Open opens an sqlite database and prepares pragmas suitable for a small web app.
+// The pragmas go in the DSN so every pooled connection gets them, not just the
+// first: without busy_timeout, two phones syncing at once could fail with SQLITE_BUSY.
 func Open(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(wal)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
 	}
-	// Light pragmas similar
-	if _, err := db.Exec("PRAGMA foreign_keys=ON;"); err != nil {
+	if err := db.Ping(); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("enable foreign keys: %w", err)
-	}
-	if _, err := db.Exec("PRAGMA journal_mode=wal;"); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("set WAL: %w", err)
-	}
-	if _, err := db.Exec("PRAGMA busy_timeout=1000;"); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("set busy_timeout: %w", err)
+		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
 	return db, nil
 }

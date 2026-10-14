@@ -35,11 +35,11 @@ export const CATEGORY_BUDGET_PERIODS: Record<Category, BudgetPeriod> = {
 // The legacy property name is retained so existing on-device settings/backups continue to work.
 export const DEFAULT_DAILY_BUDGETS: Record<Category, number> = {
   food: 1500,
-  groceries: 500,
-  dogs: 53,
-  automotive: 4000,
-  household: 2500,
-  miscellaneous: 833,
+  groceries: 0,
+  dogs: 0,
+  automotive: 0,
+  household: 0,
+  miscellaneous: 0,
 };
 
 export function emptyCategoryAmounts(): Record<Category, number> {

@@ -1,12 +1,6 @@
 import { Entry, Settings, Bill, Category, DEFAULT_SETTINGS, CATEGORIES, CATEGORY_BUDGET_PERIODS } from './types';
-import { currentYearMonth } from './dates';
 
-const KEYS = {
-  ENTRIES: 'budget_entries',
-  SETTINGS: 'budget_settings',
-  PAYMENTS: 'budget_bill_payments',
-  MONTHLY_TARGETS_V2: 'budget_monthly_targets_v2',
-};
+const KEYS = { ENTRIES: 'budget_entries', SETTINGS: 'budget_settings', PAYMENTS: 'budget_bill_payments' };
 
 // A bill checked off as paid for a given month. Name/amount are snapshotted
 // so later edits to the bill don't rewrite payment history.
@@ -98,8 +92,9 @@ export function getPace(): Pace {
   const anchorTs = settings.balanceAnchor?.ts ?? 0;
   const start = Math.max(now - 30 * dayMs, anchorTs);
   const days = Math.max((now - start) / dayMs, 0);
+  const targets = getCategoryTargets();
   const budgetPerDay = CATEGORIES.reduce((total, category) => {
-    const amount = settings.dailyBudgets[category];
+    const amount = targets[category];
     return total + (CATEGORY_BUDGET_PERIODS[category] === 'daily' ? amount : amount / 30.44);
   }, 0);
   if (days < 3) return { perDay: budgetPerDay, days, fromBudget: true };
@@ -110,42 +105,50 @@ export function getPace(): Pace {
 }
 
 export type MonthlyAverages = {
-  months: number;                              // complete months the average covers
+  months: number;                              // calendar months represented by the tracking history
   amounts: Partial<Record<Category, number>>;  // monthly categories only, rounded to whole baht
 };
 
-// Average spend per month for each monthly category, over every complete month
-// from the first logged entry up to (not including) the current month. Months
-// with no spend in a category count as zero. Returns null with no complete month yet.
+// Average spend per calendar month for each non-food category, using all data
+// from the first tracked month through the current month. The two exceptional
+// miscellaneous expenses requested by the user are intentionally ignored.
 export function getMonthlyAverages(): MonthlyAverages | null {
   const entries = getEntries();
   if (entries.length === 0) return null;
-  const current = currentYearMonth();
-  const first = entries.reduce((min, e) => e.date < min ? e.date : min, entries[0].date).slice(0, 7);
-  const [fy, fm] = first.split('-').map(Number);
-  const [cy, cm] = current.split('-').map(Number);
-  const months = (cy - fy) * 12 + (cm - fm);
+  const months = new Set(entries.map(e => e.date.slice(0, 7))).size;
   if (months < 1) return null;
   const amounts: Partial<Record<Category, number>> = {};
   for (const category of CATEGORIES) {
     if (CATEGORY_BUDGET_PERIODS[category] !== 'monthly') continue;
     const total = entries
-      .filter(e => e.category === category && e.date.slice(0, 7) < current)
+      .filter(e => e.category === category)
+      .filter(e => !(category === 'miscellaneous' && (e.amount === 6200 || e.amount === 11200)))
       .reduce((sum, e) => sum + e.amount, 0);
     amounts[category] = Math.round(total / months);
   }
   return { months, amounts };
 }
 
+// Food keeps its manually configured daily budget. The other five targets are
+// always their current per-month averages from the on-device transaction data.
+export function getCategoryTargets(): Record<Category, number> {
+  const targets = { ...getSettings().dailyBudgets };
+  const averages = getMonthlyAverages();
+  if (!averages) return targets;
+  for (const category of CATEGORIES) {
+    if (CATEGORY_BUDGET_PERIODS[category] === 'monthly') {
+      targets[category] = averages.amounts[category] ?? 0;
+    }
+  }
+  return targets;
+}
+
 export function getSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEYS.SETTINGS);
-    if (!raw) {
-      localStorage.setItem(KEYS.MONTHLY_TARGETS_V2, '1');
-      return DEFAULT_SETTINGS;
-    }
+    if (!raw) return DEFAULT_SETTINGS;
     const saved = JSON.parse(raw) as Partial<Settings>;
-    const settings: Settings = {
+    return {
       ...DEFAULT_SETTINGS,
       ...saved,
       dailyBudgets: {
@@ -154,17 +157,6 @@ export function getSettings(): Settings {
       },
       bills: Array.isArray(saved.bills) ? saved.bills : DEFAULT_SETTINGS.bills,
     };
-
-    // The first monthly-category release accidentally shipped these two targets
-    // as zero. Upgrade that legacy state once, while preserving later edits.
-    if (!localStorage.getItem(KEYS.MONTHLY_TARGETS_V2)) {
-      if (!saved.dailyBudgets?.automotive) settings.dailyBudgets.automotive = DEFAULT_SETTINGS.dailyBudgets.automotive;
-      if (!saved.dailyBudgets?.household) settings.dailyBudgets.household = DEFAULT_SETTINGS.dailyBudgets.household;
-      localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings));
-      localStorage.setItem(KEYS.MONTHLY_TARGETS_V2, '1');
-    }
-
-    return settings;
   } catch { return DEFAULT_SETTINGS; }
 }
 

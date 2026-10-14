@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { CATEGORIES, CATEGORY_LABELS, CATEGORY_BUDGET_PERIODS, Category, Settings } from '../types'
-import { getSettings, saveSettings, getBalance, getEntries, getMonthlyAverages, exportBackup, importBackup } from '../storage'
+import { getSettings, getCategoryTargets, saveSettings, getBalance, getEntries, getMonthlyAverages, exportBackup, importBackup } from '../storage'
 import { todayStr } from '../dates'
 
 function download(content: string, filename: string, mime: string) {
@@ -17,8 +17,8 @@ type Props = { onBack: () => void }
 export default function SettingsPage({ onBack }: Props) {
   const [settings, setSettings] = useState<Settings>(getSettings)
   const [budgets, setBudgets] = useState<Record<Category, string>>(() => {
-    const s = getSettings()
-    return Object.fromEntries(CATEGORIES.map(category => [category, String(s.dailyBudgets[category])])) as Record<Category, string>
+    const targets = getCategoryTargets()
+    return Object.fromEntries(CATEGORIES.map(category => [category, String(targets[category])])) as Record<Category, string>
   })
   const [msg, setMsg] = useState('')
   const [balance, setBalance] = useState<number | null>(getBalance)
@@ -41,25 +41,6 @@ export default function SettingsPage({ onBack }: Props) {
     saveSettings(updated)
     setSettings(updated)
     flash('Settings saved.')
-  }
-
-  const handleUseAverages = () => {
-    if (!averages) return
-    const next = { ...budgets }
-    for (const category of CATEGORIES) {
-      const avg = averages.amounts[category]
-      if (avg !== undefined) next[category] = String(avg)
-    }
-    const updated: Settings = {
-      ...settings,
-      dailyBudgets: Object.fromEntries(
-        CATEGORIES.map(category => [category, parseFloat(next[category]) || 0])
-      ) as Record<Category, number>
-    }
-    saveSettings(updated)
-    setSettings(updated)
-    setBudgets(next)
-    flash('Monthly targets set to averages.')
   }
 
   const handleSetBalance = () => {
@@ -151,7 +132,7 @@ export default function SettingsPage({ onBack }: Props) {
         {/* Category budgets */}
         <div style={sectionLabel}>Category Budgets (฿)</div>
         <p style={{ fontSize: 13, color: '#888', marginBottom: 10 }}>
-          Food is a daily budget. Every other category is a monthly budget.
+          Food uses a daily budget. The other five categories automatically use their average per calendar month across all tracked data{averages ? ` (${averages.months} month${averages.months === 1 ? '' : 's'})` : ''}. Miscellaneous expenses of ฿6,200 and ฿11,200 are excluded.
         </p>
         {CATEGORIES.map(cat => (
           <div key={cat} style={{ background: '#fff', borderRadius: 10, padding: '12px 14px', marginBottom: 8, display: 'flex', alignItems: 'center' }}>
@@ -165,16 +146,12 @@ export default function SettingsPage({ onBack }: Props) {
             <input
               type="number"
               value={budgets[cat]}
+              disabled={CATEGORY_BUDGET_PERIODS[cat] === 'monthly'}
               onChange={e => setBudgets(prev => ({ ...prev, [cat]: e.target.value }))}
-              style={{ width: 100, textAlign: 'right', border: '1px solid #ddd', borderRadius: 8, padding: '8px 10px', fontSize: 15 }}
+              style={{ width: 100, textAlign: 'right', border: '1px solid #ddd', borderRadius: 8, padding: '8px 10px', fontSize: 15, background: CATEGORY_BUDGET_PERIODS[cat] === 'monthly' ? '#f3f3f3' : '#fff', color: '#333' }}
             />
           </div>
         ))}
-        {averages && (
-          <button onClick={handleUseAverages} style={{ ...btn, background: '#00897b', marginTop: 8 }}>
-            Use Monthly Averages ({averages.months} mo)
-          </button>
-        )}
         <button onClick={handleSave} style={{ ...btn, background: '#1a1a2e', marginTop: 8 }}>
           Save Settings
         </button>

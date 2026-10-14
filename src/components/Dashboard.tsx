@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Category, CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS, CATEGORY_BUDGET_PERIODS, Settings, DEFAULT_SETTINGS, emptyCategoryAmounts } from '../types'
-import { getEntriesForDate, getEntriesForMonth, getSettings, getBalance, getPace, getPaymentsForMonth, Pace } from '../storage'
+import { getEntriesForDate, getEntriesForMonth, getSettings, getCategoryTargets, getMonthlyAverages, getBalance, getPace, getPaymentsForMonth, Pace } from '../storage'
 import { todayStr, currentYearMonth } from '../dates'
 
 function formatDate(s: string) {
@@ -27,6 +27,8 @@ export default function Dashboard({ onAddExpense, onHistory, onMonth, onBills, o
   const [spentToday, setSpentToday] = useState(0)
   const [spentThisMonth, setSpentThisMonth] = useState(0)
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
+  const [targets, setTargets] = useState<Record<Category, number>>(DEFAULT_SETTINGS.dailyBudgets)
+  const [averageMonths, setAverageMonths] = useState(0)
   const [balance, setBalance] = useState<number | null>(null)
   const [pace, setPace] = useState<Pace>({ perDay: 0, days: 0, fromBudget: true })
   const [billsPaidThisMonth, setBillsPaidThisMonth] = useState(0)
@@ -45,6 +47,8 @@ export default function Dashboard({ onAddExpense, onHistory, onMonth, onBills, o
     setSpentToday(todayEntries.reduce((sum, entry) => sum + entry.amount, 0))
     setSpentThisMonth(monthEntries.reduce((sum, entry) => sum + entry.amount, 0))
     setSettings(getSettings())
+    setTargets(getCategoryTargets())
+    setAverageMonths(getMonthlyAverages()?.months ?? 0)
     setBalance(getBalance())
     setPace(getPace())
     setBillsPaidThisMonth(getPaymentsForMonth(currentYearMonth()).reduce((s, p) => s + p.amount, 0))
@@ -135,7 +139,7 @@ export default function Dashboard({ onAddExpense, onHistory, onMonth, onBills, o
       {/* Category tiles */}
       <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {CATEGORIES.map(cat => {
-          const budget = settings.dailyBudgets[cat]
+          const budget = targets[cat]
           const amount = spent[cat]
           const period = CATEGORY_BUDGET_PERIODS[cat]
           const over = amount > budget
@@ -162,13 +166,15 @@ export default function Dashboard({ onAddExpense, onHistory, onMonth, onBills, o
                     <div style={{ fontSize: 24, fontWeight: 800, color: over ? '#e74c3c' : '#222' }}>฿{amount.toLocaleString()}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase' }}>{period} budget</div>
+                    <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase' }}>{period === 'daily' ? 'Daily budget' : (averageMonths > 0 ? `${averageMonths}-month average` : 'Monthly average')}</div>
                     <div style={{ fontSize: 16, fontWeight: 600, color: '#555' }}>฿{budget.toLocaleString()}</div>
                   </div>
                 </div>
 
                 <div style={{ fontSize: 13, color: over ? '#e74c3c' : '#888', marginBottom: 12 }}>
-                  {over ? `฿${(amount - budget).toLocaleString()} over budget` : `฿${(budget - amount).toLocaleString()} remaining`}
+                  {period === 'monthly'
+                    ? (over ? `฿${(amount - budget).toLocaleString()} above average` : `฿${(budget - amount).toLocaleString()} below average`)
+                    : (over ? `฿${(amount - budget).toLocaleString()} over budget` : `฿${(budget - amount).toLocaleString()} remaining`)}
                 </div>
 
                 <button

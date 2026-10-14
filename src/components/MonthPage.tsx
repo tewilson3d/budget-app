@@ -1,5 +1,5 @@
 import { CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS, CATEGORY_BUDGET_PERIODS, Category, emptyCategoryAmounts } from '../types'
-import { getEntriesForMonth, getSettings, getPaymentsForMonth } from '../storage'
+import { getEntriesForMonth, getSettings, getCategoryTargets, getMonthlyAverages, getPaymentsForMonth } from '../storage'
 import { currentYearMonth } from '../dates'
 
 type Props = { onBack: () => void }
@@ -14,6 +14,8 @@ export default function MonthPage({ onBack }: Props) {
   const monthName = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
   const settings = getSettings()
+  const targets = getCategoryTargets()
+  const averageMonths = getMonthlyAverages()?.months ?? 0
   const entries = getEntriesForMonth(yearMonth)
   const billsDue = settings.bills.reduce((s, b) => s + b.amount, 0)
   const paidPayments = getPaymentsForMonth(yearMonth)
@@ -23,8 +25,8 @@ export default function MonthPage({ onBack }: Props) {
     if (e.category in spent) spent[e.category] += e.amount
   })
 
-  const monthTarget = (category: Category) => settings.dailyBudgets[category] * (CATEGORY_BUDGET_PERIODS[category] === 'daily' ? daysInMonth : 1)
-  const paceTarget = (category: Category) => settings.dailyBudgets[category] * (CATEGORY_BUDGET_PERIODS[category] === 'daily' ? dayOfMonth : dayOfMonth / daysInMonth)
+  const monthTarget = (category: Category) => targets[category] * (CATEGORY_BUDGET_PERIODS[category] === 'daily' ? daysInMonth : 1)
+  const paceTarget = (category: Category) => targets[category] * (CATEGORY_BUDGET_PERIODS[category] === 'daily' ? dayOfMonth : dayOfMonth / daysInMonth)
   const totalTarget = CATEGORIES.reduce((s, c) => s + monthTarget(c), 0)
   const totalSpent = CATEGORIES.reduce((s, c) => s + spent[c], 0)
   const totalPace = CATEGORIES.reduce((s, c) => s + paceTarget(c), 0)
@@ -60,7 +62,7 @@ export default function MonthPage({ onBack }: Props) {
       {/* Per-category month cards */}
       <div style={{ padding: '12px 12px 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {CATEGORIES.map(cat => {
-          const budget = settings.dailyBudgets[cat]
+          const budget = targets[cat]
           const period = CATEGORY_BUDGET_PERIODS[cat]
           const target = monthTarget(cat)
           const pace = paceTarget(cat)
@@ -92,7 +94,7 @@ export default function MonthPage({ onBack }: Props) {
                     <div style={{ fontSize: 22, fontWeight: 800, color: over ? '#e74c3c' : '#222' }}>฿{amount.toLocaleString()}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase' }}>Month budget</div>
+                    <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase' }}>{period === 'daily' ? 'Month budget' : (averageMonths > 0 ? `${averageMonths}-month average` : 'Monthly average')}</div>
                     <div style={{ fontSize: 16, fontWeight: 600, color: '#555' }}>฿{target.toLocaleString()}</div>
                   </div>
                 </div>

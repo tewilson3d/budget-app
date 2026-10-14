@@ -37,8 +37,8 @@ export const DEFAULT_DAILY_BUDGETS: Record<Category, number> = {
   food: 1500,
   groceries: 500,
   dogs: 53,
-  automotive: 0,
-  household: 0,
+  automotive: 4000,
+  household: 2500,
   miscellaneous: 833,
 };
 

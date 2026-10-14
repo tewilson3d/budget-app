@@ -1,7 +1,12 @@
 import { Entry, Settings, Bill, Category, DEFAULT_SETTINGS, CATEGORIES, CATEGORY_BUDGET_PERIODS } from './types';
 import { currentYearMonth } from './dates';
 
-const KEYS = { ENTRIES: 'budget_entries', SETTINGS: 'budget_settings', PAYMENTS: 'budget_bill_payments' };
+const KEYS = {
+  ENTRIES: 'budget_entries',
+  SETTINGS: 'budget_settings',
+  PAYMENTS: 'budget_bill_payments',
+  MONTHLY_TARGETS_V2: 'budget_monthly_targets_v2',
+};
 
 // A bill checked off as paid for a given month. Name/amount are snapshotted
 // so later edits to the bill don't rewrite payment history.
@@ -135,9 +140,12 @@ export function getMonthlyAverages(): MonthlyAverages | null {
 export function getSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEYS.SETTINGS);
-    if (!raw) return DEFAULT_SETTINGS;
+    if (!raw) {
+      localStorage.setItem(KEYS.MONTHLY_TARGETS_V2, '1');
+      return DEFAULT_SETTINGS;
+    }
     const saved = JSON.parse(raw) as Partial<Settings>;
-    return {
+    const settings: Settings = {
       ...DEFAULT_SETTINGS,
       ...saved,
       dailyBudgets: {
@@ -146,6 +154,17 @@ export function getSettings(): Settings {
       },
       bills: Array.isArray(saved.bills) ? saved.bills : DEFAULT_SETTINGS.bills,
     };
+
+    // The first monthly-category release accidentally shipped these two targets
+    // as zero. Upgrade that legacy state once, while preserving later edits.
+    if (!localStorage.getItem(KEYS.MONTHLY_TARGETS_V2)) {
+      if (!saved.dailyBudgets?.automotive) settings.dailyBudgets.automotive = DEFAULT_SETTINGS.dailyBudgets.automotive;
+      if (!saved.dailyBudgets?.household) settings.dailyBudgets.household = DEFAULT_SETTINGS.dailyBudgets.household;
+      localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings));
+      localStorage.setItem(KEYS.MONTHLY_TARGETS_V2, '1');
+    }
+
+    return settings;
   } catch { return DEFAULT_SETTINGS; }
 }
 

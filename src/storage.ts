@@ -34,10 +34,23 @@ export function deleteEntry(id: string): void {
   queue({ method: 'DELETE', path: `/api/entries/${encodeURIComponent(id)}` });
 }
 
-// Keep these exceptional Miscellaneous transactions in History, but exclude
-// them from category totals, averages, and spending-pace calculations.
+function isAnnualHealthInsurance(entry: Entry): boolean {
+  return /health\s+insurance/i.test(entry.note ?? '');
+}
+
+// Keep exceptional transactions in History, but exclude them from category
+// totals, averages, and spending-pace calculations.
 export function isIgnoredForTracking(entry: Entry): boolean {
-  return entry.category === 'miscellaneous' && (entry.amount === 6200 || entry.amount === 11200);
+  if (entry.category !== 'miscellaneous') return false;
+  if (entry.amount === 6200 || entry.amount === 11200) return true;
+  return /kanye.*payback|payback.*kanye/i.test(entry.note ?? '');
+}
+
+// Annual health-insurance payments count as one-twelfth of their original
+// amount in monthly tracking. History and backups retain the original amount.
+export function trackingAmount(entry: Entry): number {
+  if (isIgnoredForTracking(entry)) return 0;
+  return isAnnualHealthInsurance(entry) ? Math.round(entry.amount / 12) : entry.amount;
 }
 
 export function getEntriesForDate(date: string): Entry[] {
@@ -117,7 +130,7 @@ export function getPace(): Pace {
   if (days < 3) return { perDay: budgetPerDay, days, fromBudget: true };
   const spent = getEntries()
     .filter(e => entryTs(e) >= start && !isIgnoredForTracking(e))
-    .reduce((sum, e) => sum + e.amount, 0);
+    .reduce((sum, e) => sum + trackingAmount(e), 0);
   return { perDay: spent / days, days, fromBudget: false };
 }
 
@@ -126,9 +139,9 @@ export type MonthlyAverages = {
   amounts: Partial<Record<Category, number>>;  // monthly categories only, rounded to whole baht
 };
 
-// Average spend per calendar month for each non-food category, using all data
-// from the first tracked month through the current month. The two exceptional
-// miscellaneous expenses requested by the user are intentionally ignored.
+// Average spend per calendar month for each non-food category, using all data.
+// Exceptional miscellaneous expenses are ignored, while annual health-insurance
+// payments contribute one-twelfth of their amount to the monthly average.
 export function getMonthlyAverages(): MonthlyAverages | null {
   const entries = getEntries();
   if (entries.length === 0) return null;
@@ -137,10 +150,14 @@ export function getMonthlyAverages(): MonthlyAverages | null {
   const amounts: Partial<Record<Category, number>> = {};
   for (const category of CATEGORIES) {
     if (CATEGORY_BUDGET_PERIODS[category] !== 'monthly') continue;
-    const total = entries
+    const monthlyAverage = entries
       .filter(e => e.category === category && !isIgnoredForTracking(e))
-      .reduce((sum, e) => sum + e.amount, 0);
-    amounts[category] = Math.round(total / months);
+      .reduce((sum, e) => {
+        // An annual premium contributes its monthly equivalent directly;
+        // ordinary spending is averaged across the tracked months.
+        return sum + (isAnnualHealthInsurance(e) ? e.amount / 12 : e.amount / months);
+      }, 0);
+    amounts[category] = Math.round(monthlyAverage);
   }
   return { months, amounts };
 }

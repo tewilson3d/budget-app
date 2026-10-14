@@ -1,5 +1,5 @@
 import { CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS, CATEGORY_BUDGET_PERIODS, Category, emptyCategoryAmounts } from '../types'
-import { getEntriesForMonth, getSettings, getCategoryTargets, getMonthlyAverages, getPaymentsForMonth } from '../storage'
+import { getEntriesForMonth, getSettings, getCategoryTargets, getMonthlyAverages, trackingAmount, getPaymentsForMonth } from '../storage'
 import { currentYearMonth } from '../dates'
 
 type Props = { onBack: () => void }
@@ -22,7 +22,7 @@ export default function MonthPage({ onBack }: Props) {
   const billsPaid = paidPayments.reduce((s, p) => s + p.amount, 0)
   const spent: Record<Category, number> = emptyCategoryAmounts()
   entries.forEach(e => {
-    if (e.category in spent) spent[e.category] += e.amount
+    if (e.category in spent) spent[e.category] += trackingAmount(e)
   })
 
   const monthTarget = (category: Category) => targets[category] * (CATEGORY_BUDGET_PERIODS[category] === 'daily' ? daysInMonth : 1)

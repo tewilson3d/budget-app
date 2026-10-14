@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Category, CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS, CATEGORY_BUDGET_PERIODS, Settings, DEFAULT_SETTINGS, emptyCategoryAmounts } from '../types'
-import { getEntriesForDate, getEntriesForMonth, getSettings, getCategoryTargets, getMonthlyAverages, getBalance, getPace, getPaymentsForMonth, Pace } from '../storage'
+import { getEntriesForDate, getEntriesForMonth, getSettings, getCategoryTargets, getMonthlyAverages, trackingAmount, getBalance, getPace, getPaymentsForMonth, Pace } from '../storage'
 import { todayStr, currentYearMonth } from '../dates'
 
 function formatDate(s: string) {
@@ -38,14 +38,14 @@ export default function Dashboard({ onAddExpense, onHistory, onMonth, onBills, o
     const monthEntries = getEntriesForMonth(currentYearMonth())
     const totals = emptyCategoryAmounts()
     todayEntries.forEach(e => {
-      if (e.category === 'food') totals.food += e.amount
+      if (e.category === 'food') totals.food += trackingAmount(e)
     })
     monthEntries.forEach(e => {
-      if (e.category !== 'food' && e.category in totals) totals[e.category] += e.amount
+      if (e.category !== 'food' && e.category in totals) totals[e.category] += trackingAmount(e)
     })
     setSpent(totals)
-    setSpentToday(todayEntries.reduce((sum, entry) => sum + entry.amount, 0))
-    setSpentThisMonth(monthEntries.reduce((sum, entry) => sum + entry.amount, 0))
+    setSpentToday(todayEntries.reduce((sum, entry) => sum + trackingAmount(entry), 0))
+    setSpentThisMonth(monthEntries.reduce((sum, entry) => sum + trackingAmount(entry), 0))
     setSettings(getSettings())
     setTargets(getCategoryTargets())
     setAverageMonths(getMonthlyAverages()?.months ?? 0)

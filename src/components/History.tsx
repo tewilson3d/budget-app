@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CATEGORY_LABELS, CATEGORY_COLORS } from '../types'
+import { CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS, Category } from '../types'
 import { getEntries, deleteEntry } from '../storage'
 
 function fmt(s: string) {
@@ -11,6 +11,8 @@ type Props = { onBack: () => void }
 
 export default function History({ onBack }: Props) {
   const [entries, setEntries] = useState(() => getEntries().slice().reverse())
+  const [category, setCategory] = useState<'all' | Category>('all')
+  const visibleEntries = category === 'all' ? entries : entries.filter(entry => entry.category === category)
 
   const remove = (id: string) => {
     if (!confirm('Delete this entry?')) return
@@ -26,10 +28,30 @@ export default function History({ onBack }: Props) {
       </div>
 
       <div style={{ padding: '12px 12px 32px' }}>
-        {entries.length === 0 && (
-          <div style={{ textAlign: 'center', color: '#aaa', padding: 60 }}>No entries yet</div>
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 12 }}>
+          <button
+            onClick={() => setCategory('all')}
+            style={{ ...filterButton, background: category === 'all' ? '#1a1a2e' : '#fff', color: category === 'all' ? '#fff' : '#555' }}
+          >
+            All
+          </button>
+          {CATEGORIES.map(item => (
+            <button
+              key={item}
+              onClick={() => setCategory(item)}
+              style={{ ...filterButton, background: category === item ? CATEGORY_COLORS[item] : '#fff', color: category === item ? '#fff' : '#555' }}
+            >
+              {CATEGORY_LABELS[item]}
+            </button>
+          ))}
+        </div>
+
+        {visibleEntries.length === 0 && (
+          <div style={{ textAlign: 'center', color: '#aaa', padding: 60 }}>
+            {category === 'all' ? 'No entries yet' : `No ${CATEGORY_LABELS[category]} entries`}
+          </div>
         )}
-        {entries.map(e => (
+        {visibleEntries.map(e => (
           <div
             key={e.id}
             style={{ background: '#fff', borderRadius: 12, padding: 14, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
@@ -51,4 +73,14 @@ export default function History({ onBack }: Props) {
       </div>
     </div>
   )
+}
+
+const filterButton: React.CSSProperties = {
+  border: 'none',
+  borderRadius: 999,
+  padding: '9px 14px',
+  fontSize: 13,
+  fontWeight: 700,
+  whiteSpace: 'nowrap',
+  boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
 }

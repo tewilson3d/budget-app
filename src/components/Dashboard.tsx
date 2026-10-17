@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Category, CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS, CATEGORY_BUDGET_PERIODS, Settings, DEFAULT_SETTINGS, emptyCategoryAmounts } from '../types'
 import { getEntriesForDate, getEntriesForMonth, getSettings, getCategoryTargets, getMonthlyAverages, trackingAmount, getBalance, getPace, getPaymentsForMonth, Pace } from '../storage'
 import { todayStr, currentYearMonth } from '../dates'
+import { APP_VERSION } from '../version'
 
 function formatDate(s: string) {
   const [y, m, d] = s.split('-').map(Number)
@@ -64,7 +65,10 @@ export default function Dashboard({ onAddExpense, onHistory, onMonth, onBills, o
     <div style={{ minHeight: '100dvh', background: '#f0f4f8' }}>
       {/* Header */}
       <div style={{ background: '#1a1a2e', padding: '16px 16px 20px', color: '#fff' }}>
-        <div style={{ fontSize: 13, color: '#aaa', marginBottom: 12 }}>{formatDate(today)}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#aaa', marginBottom: 12 }}>
+          <span>{formatDate(today)}</span>
+          <span>v{APP_VERSION}</span>
+        </div>
         {balance !== null && settings.balanceAnchor && (() => {
           // What you have — the number you typed in, minus everything logged since.
           const anchor = settings.balanceAnchor

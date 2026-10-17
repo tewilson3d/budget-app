@@ -3,6 +3,7 @@ import { CATEGORIES, CATEGORY_LABELS, CATEGORY_BUDGET_PERIODS, Category, Setting
 import { getSettings, getCategoryTargets, saveSettings, getBalance, getEntries, getMonthlyAverages, exportBackup, importBackup } from '../storage'
 import { todayStr } from '../dates'
 import { uploadFullHistory } from '../sync'
+import { APP_VERSION } from '../version'
 
 function download(content: string, filename: string, mime: string) {
   const url = URL.createObjectURL(new Blob([content], { type: mime }))
@@ -24,6 +25,7 @@ export default function SettingsPage({ onBack }: Props) {
   const [msg, setMsg] = useState('')
   const [balance, setBalance] = useState<number | null>(getBalance)
   const [balanceInput, setBalanceInput] = useState('')
+  const [updating, setUpdating] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const [averages] = useState(getMonthlyAverages)
@@ -31,6 +33,24 @@ export default function SettingsPage({ onBack }: Props) {
   const flash = (text: string) => {
     setMsg(text)
     setTimeout(() => setMsg(''), 2500)
+  }
+
+  const handleUpdateApp = async () => {
+    setUpdating(true)
+    try {
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready
+        await registration.update()
+        // A changed worker reloads immediately through main.tsx. This fallback
+        // also refreshes the shell when the phone is already current.
+        window.setTimeout(() => window.location.reload(), 1500)
+      } else {
+        window.location.reload()
+      }
+    } catch {
+      setUpdating(false)
+      alert('Could not check for an update. Please check your connection and try again.')
+    }
   }
 
   const handleSave = () => {
@@ -114,6 +134,20 @@ export default function SettingsPage({ onBack }: Props) {
       </div>
 
       <div style={{ padding: 16 }}>
+        {/* App update */}
+        <div style={{ ...sectionLabel, marginTop: 4 }}>App</div>
+        <div style={{ background: '#fff', borderRadius: 10, padding: '12px 14px', marginBottom: 8, display: 'flex', alignItems: 'center' }}>
+          <span style={{ flex: 1, fontWeight: 600, fontSize: 15 }}>Installed version</span>
+          <span style={{ color: '#777', fontSize: 14 }}>v{APP_VERSION}</span>
+        </div>
+        <button
+          onClick={handleUpdateApp}
+          disabled={updating}
+          style={{ ...btn, background: '#00897b', opacity: updating ? 0.6 : 1 }}
+        >
+          {updating ? 'Checking for Update…' : 'Update App'}
+        </button>
+
         {/* Wallet balance */}
         <div style={sectionLabel}>Wallet Balance (฿)</div>
         <p style={{ fontSize: 13, color: '#888', marginBottom: 10 }}>

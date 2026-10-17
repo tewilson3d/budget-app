@@ -1,6 +1,6 @@
-export type Category = 'food' | 'groceries' | 'dogs' | 'automotive' | 'household' | 'miscellaneous';
+export type Category = 'food' | 'groceries' | 'dogs' | 'automotive' | 'household' | 'supplements' | 'miscellaneous';
 
-export const CATEGORIES: Category[] = ['food', 'groceries', 'dogs', 'automotive', 'household', 'miscellaneous'];
+export const CATEGORIES: Category[] = ['food', 'groceries', 'dogs', 'automotive', 'household', 'supplements', 'miscellaneous'];
 
 export const CATEGORY_LABELS: Record<Category, string> = {
   food: 'Food',
@@ -8,6 +8,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   dogs: 'Dogs',
   automotive: 'Automotive',
   household: 'Household',
+  supplements: 'Supplements',
   miscellaneous: 'Miscellaneous',
 };
 
@@ -17,6 +18,7 @@ export const CATEGORY_COLORS: Record<Category, string> = {
   dogs: '#8e44ad',
   automotive: '#00897b',
   household: '#d81b60',
+  supplements: '#7cb342',
   miscellaneous: '#2980b9',
 };
 
@@ -28,6 +30,7 @@ export const CATEGORY_BUDGET_PERIODS: Record<Category, BudgetPeriod> = {
   dogs: 'monthly',
   automotive: 'monthly',
   household: 'monthly',
+  supplements: 'monthly',
   miscellaneous: 'monthly',
 };
 
@@ -39,6 +42,7 @@ export const DEFAULT_DAILY_BUDGETS: Record<Category, number> = {
   dogs: 0,
   automotive: 0,
   household: 0,
+  supplements: 0,
   miscellaneous: 0,
 };
 

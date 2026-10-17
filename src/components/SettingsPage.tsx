@@ -132,7 +132,7 @@ export default function SettingsPage({ onBack }: Props) {
         {/* Category budgets */}
         <div style={sectionLabel}>Category Budgets (฿)</div>
         <p style={{ fontSize: 13, color: '#888', marginBottom: 10 }}>
-          Food uses a daily budget. The other five categories automatically use their average per calendar month across all tracked data{averages ? ` (${averages.months} month${averages.months === 1 ? '' : 's'})` : ''}. Miscellaneous expenses of ฿6,200, ฿11,200, and Kanye’s payback are excluded. Health insurance is divided by 12.
+          Food uses a daily budget. The other six categories automatically use their average per calendar month across all tracked data{averages ? ` (${averages.months} month${averages.months === 1 ? '' : 's'})` : ''}. Miscellaneous expenses of ฿6,200, ฿11,200, and Kanye’s payback are excluded. Health insurance is divided by 12.
         </p>
         {CATEGORIES.map(cat => (
           <div key={cat} style={{ background: '#fff', borderRadius: 10, padding: '12px 14px', marginBottom: 8, display: 'flex', alignItems: 'center' }}>

@@ -70,6 +70,8 @@ func TestServer_HandlePutEntry_validation(t *testing.T) {
 	}{
 		{name: "valid entry", path: "/api/entries/e1",
 			body: `{"id":"e1","date":"2026-10-14","category":"food","amount":120}`, wantStatus: http.StatusOK},
+		{name: "supplements category", path: "/api/entries/s1",
+			body: `{"id":"s1","date":"2026-10-14","category":"supplements","amount":120}`, wantStatus: http.StatusOK},
 		{name: "id differs from URL", path: "/api/entries/other",
 			body: `{"id":"e1","date":"2026-10-14","category":"food","amount":120}`, wantStatus: http.StatusBadRequest},
 		{name: "bad date", path: "/api/entries/e2",

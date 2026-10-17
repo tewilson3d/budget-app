@@ -34,6 +34,16 @@ export function deleteEntry(id: string): void {
   queue({ method: 'DELETE', path: `/api/entries/${encodeURIComponent(id)}` });
 }
 
+export function updateEntryCategory(id: string, category: Category): void {
+  const entries = getEntries();
+  const index = entries.findIndex(entry => entry.id === id);
+  if (index < 0) return;
+  const updated = { ...entries[index], category };
+  entries[index] = updated;
+  localStorage.setItem(KEYS.ENTRIES, JSON.stringify(entries));
+  queue({ method: 'PUT', path: `/api/entries/${encodeURIComponent(id)}`, body: updated });
+}
+
 function isAnnualHealthInsurance(entry: Entry): boolean {
   return /health\s+insurance/i.test(entry.note ?? '');
 }

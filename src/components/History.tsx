@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS, Category } from '../types'
-import { getEntries, deleteEntry } from '../storage'
+import { getEntries, deleteEntry, updateEntryCategory } from '../storage'
 
 function fmt(s: string) {
   const [y, m, d] = s.split('-').map(Number)
@@ -17,6 +17,11 @@ export default function History({ onBack }: Props) {
   const remove = (id: string) => {
     if (!confirm('Delete this entry?')) return
     deleteEntry(id)
+    setEntries(getEntries().slice().reverse())
+  }
+
+  const move = (id: string, nextCategory: Category) => {
+    updateEntryCategory(id, nextCategory)
     setEntries(getEntries().slice().reverse())
   }
 
@@ -58,8 +63,15 @@ export default function History({ onBack }: Props) {
           >
             <div style={{ width: 10, height: 10, borderRadius: 5, background: CATEGORY_COLORS[e.category], flexShrink: 0 }} />
             <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontWeight: 700, fontSize: 15 }}>{CATEGORY_LABELS[e.category]}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <select
+                  aria-label={`Category for ${e.note || e.amount}`}
+                  value={e.category}
+                  onChange={event => move(e.id, event.target.value as Category)}
+                  style={{ border: '1px solid #ddd', borderRadius: 7, background: '#fafafa', padding: '4px 6px', color: CATEGORY_COLORS[e.category], fontWeight: 700, fontSize: 13, minWidth: 0 }}
+                >
+                  {CATEGORIES.map(item => <option key={item} value={item}>{CATEGORY_LABELS[item]}</option>)}
+                </select>
                 <span style={{ fontWeight: 800, fontSize: 16 }}>฿{e.amount.toLocaleString()}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>

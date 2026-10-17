@@ -25,7 +25,7 @@ const (
 
 var validCategories = map[string]bool{
 	"food": true, "groceries": true, "dogs": true,
-	"automotive": true, "household": true, "miscellaneous": true,
+	"automotive": true, "household": true, "supplements": true, "miscellaneous": true,
 }
 
 // exactFields decodes the named fields of a JSON object by their exact key.

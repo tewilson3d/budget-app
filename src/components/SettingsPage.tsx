@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { CATEGORIES, CATEGORY_LABELS, CATEGORY_BUDGET_PERIODS, Category, Settings } from '../types'
 import { getSettings, getCategoryTargets, saveSettings, getBalance, getEntries, getMonthlyAverages, exportBackup, importBackup } from '../storage'
 import { todayStr } from '../dates'
+import { uploadFullHistory } from '../sync'
 
 function download(content: string, filename: string, mime: string) {
   const url = URL.createObjectURL(new Blob([content], { type: mime }))
@@ -23,6 +24,7 @@ export default function SettingsPage({ onBack }: Props) {
   const [msg, setMsg] = useState('')
   const [balance, setBalance] = useState<number | null>(getBalance)
   const [balanceInput, setBalanceInput] = useState('')
+  const [uploading, setUploading] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const [averages] = useState(getMonthlyAverages)
 
@@ -60,6 +62,18 @@ export default function SettingsPage({ onBack }: Props) {
     saveSettings(updated)
     setSettings(updated)
     setBalance(null)
+  }
+
+  const handleUploadToVm = async () => {
+    setUploading(true)
+    try {
+      const count = await uploadFullHistory()
+      flash(`${count} expense${count === 1 ? '' : 's'} uploaded to the VM.`)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Upload failed. Please try again.')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleExportCsv = () => {
@@ -157,10 +171,17 @@ export default function SettingsPage({ onBack }: Props) {
         </button>
 
         {/* Backup */}
-        <div style={sectionLabel}>Backup &amp; Export</div>
+        <div style={sectionLabel}>VM Sync, Backup &amp; Export</div>
         <p style={{ fontSize: 13, color: '#888', marginBottom: 10 }}>
-          All data lives on this phone. Download a backup now and then so you can restore it on a new device.
+          Upload this phone’s complete history to the VM for immediate analysis. This updates matching records without deleting entries from another device.
         </p>
+        <button
+          onClick={handleUploadToVm}
+          disabled={uploading}
+          style={{ ...btn, background: '#e67e22', marginBottom: 8, opacity: uploading ? 0.6 : 1 }}
+        >
+          {uploading ? 'Uploading to VM…' : 'Upload Full History to VM'}
+        </button>
         <button onClick={handleExportCsv} style={{ ...btn, background: '#2980b9', marginBottom: 8 }}>
           Export Expenses (CSV)
         </button>

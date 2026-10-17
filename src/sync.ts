@@ -68,3 +68,34 @@ export function startSync(): () => void {
     window.removeEventListener('online', onVisible);
   };
 }
+
+export async function uploadFullHistory(): Promise<number> {
+  if (!(await flush())) throw new Error('The VM could not be reached. Please try again.')
+
+  const local = localState()
+  let res: Response
+  try {
+    res = await fetch('/api/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'upsert', ...local }),
+      credentials: 'same-origin',
+      cache: 'no-store',
+      redirect: 'manual',
+    })
+  } catch {
+    throw new Error('The VM could not be reached. Please try again.')
+  }
+  if (loggedOut(res)) {
+    goToLogin()
+    throw new Error('Please log in again, then retry the upload.')
+  }
+  if (!res.ok) {
+    const detail = await res.json().then(j => j.error as string).catch(() => `error ${res.status}`)
+    throw new Error(detail)
+  }
+
+  localStorage.setItem(IMPORTED, '1')
+  await sync()
+  return local.entries.length
+}

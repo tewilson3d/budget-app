@@ -271,6 +271,14 @@ func TestServer_HandleImport(t *testing.T) {
 			wantFoodDays: `{"food":1500}`,
 		},
 		{
+			name:         "upsert refreshes phone records and keeps server-only records",
+			body:         backup("upsert"),
+			wantStatus:   http.StatusOK,
+			wantEntries:  map[string]float64{"old": 999, "new": 50},
+			wantBills:    []string{"phone/2026-09", "water/2026-10"},
+			wantFoodDays: `{"food":800}`,
+		},
+		{
 			name:         "replace makes the pot exactly the backup",
 			body:         backup("replace"),
 			wantStatus:   http.StatusOK,

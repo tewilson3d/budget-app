@@ -270,9 +270,9 @@ func (s *Server) HandlePutSettings(w http.ResponseWriter, r *http.Request) {
 
 type importRequest struct {
 	// Mode "merge" adds what the pot lacks and keeps what it has: a phone's
-	// pre-sharing history, sent once. Mode "replace" makes the entries and
-	// bill payments exactly the backup's: restoring a backup file. Settings
-	// are replaced only if the backup has them, as on the phone itself.
+	// pre-sharing history, sent once. Mode "upsert" uploads a phone's complete
+	// current copy without deleting server-only records. Mode "replace" makes
+	// entries and bill payments exactly the backup's: restoring a backup file.
 	Mode         string            `json:"mode"`
 	Entries      []json.RawMessage `json:"entries"`
 	BillPayments []json.RawMessage `json:"billPayments"`
@@ -286,8 +286,8 @@ func (s *Server) HandleImport(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, maxImportBytes, &req) {
 		return
 	}
-	if req.Mode != "merge" && req.Mode != "replace" {
-		writeJSONError(w, http.StatusBadRequest, `mode must be "merge" or "replace"`)
+	if req.Mode != "merge" && req.Mode != "upsert" && req.Mode != "replace" {
+		writeJSONError(w, http.StatusBadRequest, `mode must be "merge", "upsert", or "replace"`)
 		return
 	}
 	entries := make([]entryKeys, len(req.Entries))
@@ -334,6 +334,7 @@ func (s *Server) importTx(ctx context.Context, by string, req importRequest, ent
 	q := dbgen.New(tx)
 	now := time.Now()
 	replace := req.Mode == "replace"
+	upsert := replace || req.Mode == "upsert"
 
 	if replace {
 		if err := q.DeleteAllEntries(ctx); err != nil {
@@ -345,7 +346,7 @@ func (s *Server) importTx(ctx context.Context, by string, req importRequest, ent
 	}
 	for i, e := range entries {
 		p := dbgen.InsertEntryIfMissingParams{ID: e.ID, Date: e.Date, Data: string(req.Entries[i]), CreatedBy: by, UpdatedAt: now}
-		if replace {
+		if upsert {
 			err = q.UpsertEntry(ctx, dbgen.UpsertEntryParams(p))
 		} else {
 			err = q.InsertEntryIfMissing(ctx, p)
@@ -356,7 +357,7 @@ func (s *Server) importTx(ctx context.Context, by string, req importRequest, ent
 	}
 	for i, pk := range payments {
 		p := dbgen.InsertBillPaymentIfMissingParams{BillID: pk.BillID, Month: pk.Month, Data: string(req.BillPayments[i]), CreatedBy: by, UpdatedAt: now}
-		if replace {
+		if upsert {
 			err = q.UpsertBillPayment(ctx, dbgen.UpsertBillPaymentParams(p))
 		} else {
 			err = q.InsertBillPaymentIfMissing(ctx, p)
@@ -366,7 +367,7 @@ func (s *Server) importTx(ctx context.Context, by string, req importRequest, ent
 		}
 	}
 	if hasSettings {
-		if replace {
+		if upsert {
 			err = q.UpsertSettings(ctx, dbgen.UpsertSettingsParams{Data: string(req.Settings), UpdatedBy: by, UpdatedAt: now})
 		} else {
 			err = q.InsertSettingsIfMissing(ctx, dbgen.InsertSettingsIfMissingParams{Data: string(req.Settings), UpdatedBy: by, UpdatedAt: now})

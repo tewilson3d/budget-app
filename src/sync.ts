@@ -1,3 +1,4 @@
+import { apiHeaders } from './auth';
 import { applyServerState, localState, SharedState } from './storage';
 import { flush, goToLogin, loggedOut, onFirstImportDone, pendingCount, queue } from './outbox';
 
@@ -42,7 +43,7 @@ async function syncOnce(): Promise<void> {
 
   let state: SharedState;
   try {
-    const res = await fetch('/api/state', { credentials: 'same-origin', cache: 'no-store', redirect: 'manual' });
+    const res = await fetch('/api/state', { headers: apiHeaders(), credentials: 'same-origin', cache: 'no-store', redirect: 'manual' });
     if (loggedOut(res)) { goToLogin(); return; }
     if (!res.ok) return;
     state = (await res.json()) as SharedState;
@@ -77,7 +78,7 @@ export async function uploadFullHistory(): Promise<number> {
   try {
     res = await fetch('/api/import', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: apiHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ mode: 'upsert', ...local }),
       credentials: 'same-origin',
       cache: 'no-store',

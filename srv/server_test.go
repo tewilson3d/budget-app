@@ -49,6 +49,11 @@ func newTestServer(t *testing.T) *Server {
 // ("" means not logged in) and returns the status and body.
 func do(t *testing.T, h http.Handler, method, path, email, body string) (int, string, http.Header) {
 	t.Helper()
+	return doAuth(t, h, method, path, email, "", body)
+}
+
+func doAuth(t *testing.T, h http.Handler, method, path, email, appKey, body string) (int, string, http.Header) {
+	t.Helper()
 	var rd io.Reader
 	if body != "" {
 		rd = strings.NewReader(body)
@@ -56,6 +61,9 @@ func do(t *testing.T, h http.Handler, method, path, email, body string) (int, st
 	req := httptest.NewRequest(method, path, rd)
 	if email != "" {
 		req.Header.Set("X-ExeDev-Email", email)
+	}
+	if appKey != "" {
+		req.Header.Set("X-Budget-Key", appKey)
 	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -97,10 +105,9 @@ func TestServer_requireMember(t *testing.T) {
 		wantLocation string
 	}{
 		{name: "api without login is 401", path: "/api/state", wantStatus: http.StatusUnauthorized},
-		{name: "page without login redirects to exe.dev login", path: "/history?x=1", wantStatus: http.StatusFound,
-			wantLocation: "/__exe.dev/login?redirect=%2Fhistory%3Fx%3D1"},
+		{name: "page without login serves standalone shell", path: "/history?x=1", wantStatus: http.StatusOK},
 		{name: "api for non-member is 403", path: "/api/state", email: outsider, wantStatus: http.StatusForbidden},
-		{name: "page for non-member is 403", path: "/", email: outsider, wantStatus: http.StatusForbidden},
+		{name: "page for non-member still serves standalone shell", path: "/", email: outsider, wantStatus: http.StatusOK},
 		{name: "member gets api", path: "/api/state", email: memberA, wantStatus: http.StatusOK},
 		{name: "member email is case-insensitive", path: "/api/state", email: "  A@EXAMPLE.com", wantStatus: http.StatusOK},
 		{name: "second member gets page", path: "/", email: memberB, wantStatus: http.StatusOK},
@@ -202,5 +209,28 @@ func TestServer_Handler_unknownAPI(t *testing.T) {
 	status, body, _ := do(t, h, http.MethodGet, "/api/nope", memberA, "")
 	if status != http.StatusNotFound || !strings.Contains(body, "not found") {
 		t.Errorf("GET /api/nope = %d %s, want 404 JSON (not the app shell)", status, body)
+	}
+}
+
+func TestServer_standaloneAppKey(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t)
+	s.AppKey = "test-standalone-key"
+
+	status, body, _ := doAuth(t, s.Handler(), http.MethodGet, "/api/state", "", s.AppKey, "")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", status, body)
+	}
+	var state struct{ Member string }
+	if err := json.Unmarshal([]byte(body), &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.Member != "standalone-app" {
+		t.Errorf("member = %q, want standalone-app", state.Member)
+	}
+
+	status, _, _ = doAuth(t, s.Handler(), http.MethodGet, "/api/state", "", "wrong-key", "")
+	if status != http.StatusUnauthorized {
+		t.Errorf("wrong key status = %d, want 401", status)
 	}
 }

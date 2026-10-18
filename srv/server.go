@@ -2,12 +2,12 @@ package srv
 
 import (
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -28,6 +28,9 @@ type Server struct {
 	// DevUser, when set, stands in for a request with no exe.dev login, so the
 	// app can be run locally without the proxy. Never set it in production.
 	DevUser string
+	// AppKey authenticates installed standalone PWAs without relying on an
+	// exe.dev browser session. It is stored only in the service environment.
+	AppKey string
 }
 
 func New(dbPath, distDir string, members []string, devUser string) (*Server, error) {
@@ -35,6 +38,7 @@ func New(dbPath, distDir string, members []string, devUser string) (*Server, err
 		DistDir: distDir,
 		Members: map[string]bool{},
 		DevUser: strings.ToLower(strings.TrimSpace(devUser)),
+		AppKey:  strings.TrimSpace(os.Getenv("BUDGET_APP_KEY")),
 	}
 	for _, m := range members {
 		if m = strings.ToLower(strings.TrimSpace(m)); m != "" {
@@ -80,36 +84,37 @@ func contextWithMember(r *http.Request, email string) context.Context {
 	return context.WithValue(r.Context(), ctxKey{}, email)
 }
 
-// requireMember lets through only logged-in members. A visitor with no
-// exe.dev login is sent to log in (or gets 401 on the API); a logged-in
-// non-member gets 403.
+// requireMember leaves the PWA shell public so an installed app never gets
+// bounced into a browser login. Budget data remains private: API calls require
+// either an allowed exe.dev identity or the standalone app key.
 func (s *Server) requireMember(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		email := strings.ToLower(strings.TrimSpace(r.Header.Get("X-ExeDev-Email")))
 		if email == "" {
 			email = s.DevUser
 		}
-		isAPI := strings.HasPrefix(r.URL.Path, "/api/")
-		switch {
-		case email == "":
-			if isAPI {
-				writeJSONError(w, http.StatusUnauthorized, "not logged in")
-				return
-			}
-			http.Redirect(w, r, "/__exe.dev/login?redirect="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
-			return
-		case !s.Members[email]:
-			slog.Warn("refused non-member", "email", email, "path", r.URL.Path)
-			if isAPI {
-				writeJSONError(w, http.StatusForbidden, "this account is not a member of this budget")
-				return
-			}
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusForbidden)
-			fmt.Fprint(w, `<!doctype html><meta name="viewport" content="width=device-width"><p style="font-family:sans-serif;padding:16px">This account is not a member of this budget.</p><form method="post" action="/__exe.dev/logout" style="padding:0 16px"><button>Log out</button></form>`)
+		if email != "" && s.Members[email] {
+			next.ServeHTTP(w, r.WithContext(contextWithMember(r, email)))
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(contextWithMember(r, email)))
+
+		provided := r.Header.Get("X-Budget-Key")
+		if s.AppKey != "" && len(provided) == len(s.AppKey) && subtle.ConstantTimeCompare([]byte(provided), []byte(s.AppKey)) == 1 {
+			next.ServeHTTP(w, r.WithContext(contextWithMember(r, "standalone-app")))
+			return
+		}
+
+		if email != "" {
+			slog.Warn("refused non-member", "email", email, "path", r.URL.Path)
+			writeJSONError(w, http.StatusForbidden, "this account is not a member of this budget")
+			return
+		}
+		writeJSONError(w, http.StatusUnauthorized, "enter the app access key")
 	})
 }
 

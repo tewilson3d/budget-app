@@ -16,6 +16,7 @@ export type Op = {
 
 const OUTBOX = 'budget_outbox';
 const SYNC_ERROR = 'budget_sync_error';
+export const LOGIN_PATH = '/__exe.dev/login?redirect=/';
 
 function readOutbox(): Op[] {
   try { return JSON.parse(localStorage.getItem(OUTBOX) ?? '[]'); }
@@ -48,21 +49,21 @@ export function setSyncError(message: string | null): void {
   window.dispatchEvent(new Event(SYNC_ERROR_EVENT));
 }
 
-// A 401 means this device's standalone access key is missing or no longer
-// valid. Redirects are also treated as locked during the private-to-public
-// proxy transition.
+// exe.dev answers a lapsed login with a redirect to its login page, not a 401.
+// Following it would turn a failed save into an apparent success, so API calls
+// never follow redirects; a redirect or a 401 both mean "log in again".
 export function loggedOut(res: Response): boolean {
   return res.type === 'opaqueredirect' || res.status === 401 || (res.status >= 300 && res.status < 400);
 }
 
 let redirecting = false;
 
-// Return to the in-app unlock screen instead of opening an external browser.
+// The exe.dev login has lapsed: send the user to log in again, once.
 export function goToLogin(): void {
   if (redirecting) return;
   redirecting = true;
   clearAccessKey();
-  window.location.reload();
+  window.location.href = LOGIN_PATH;
 }
 
 let flushing: Promise<boolean> | null = null;

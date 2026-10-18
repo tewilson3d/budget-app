@@ -234,3 +234,25 @@ func TestServer_standaloneAppKey(t *testing.T) {
 		t.Errorf("wrong key status = %d, want 401", status)
 	}
 }
+
+func TestServer_refreshAppBypassesLoginAndRequiresKey(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t)
+	s.AppKey = "refresh-test-key"
+	h := s.Handler()
+
+	status, _, _ := do(t, h, http.MethodGet, "/api/refresh-app?key=wrong", "", "")
+	if status != http.StatusUnauthorized {
+		t.Fatalf("wrong key status = %d, want 401", status)
+	}
+	status, body, headers := do(t, h, http.MethodGet, "/api/refresh-app?key="+s.AppKey, "", "")
+	if status != http.StatusOK {
+		t.Fatalf("correct key status = %d, want 200", status)
+	}
+	if !strings.Contains(body, "navigator.serviceWorker.getRegistrations") || !strings.Contains(body, s.AppKey) {
+		t.Errorf("refresh page does not contain reset script")
+	}
+	if got := headers.Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
+	}
+}

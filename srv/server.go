@@ -89,7 +89,7 @@ func contextWithMember(r *http.Request, email string) context.Context {
 // either an allowed exe.dev identity or the standalone app key.
 func (s *Server) requireMember(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/api/") {
+		if !strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api/refresh-app" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -119,6 +119,24 @@ func (s *Server) requireMember(next http.Handler) http.Handler {
 }
 
 // ---- Static PWA ----
+
+// handleRefreshApp is deliberately under /api/, which every historical service
+// worker excludes from navigation caching. Opening this URL therefore reaches
+// the server even when a phone is stuck on an old PWA build.
+func (s *Server) handleRefreshApp(w http.ResponseWriter, r *http.Request) {
+	provided := r.URL.Query().Get("key")
+	if s.AppKey == "" || len(provided) != len(s.AppKey) || subtle.ConstantTimeCompare([]byte(provided), []byte(s.AppKey)) != 1 {
+		writeJSONError(w, http.StatusUnauthorized, "invalid app access key")
+		return
+	}
+	encodedKey, _ := json.Marshal(s.AppKey)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	fmt.Fprintf(w, `<!doctype html><meta name="viewport" content="width=device-width"><title>Updating Budget App</title>
+<style>body{font-family:system-ui;background:#1a1a2e;color:white;display:grid;place-items:center;min-height:100vh;margin:0;text-align:center;padding:24px;box-sizing:border-box}p{color:#bbb}</style>
+<div><h2>Updating Budget App…</h2><p>Removing the stale phone version and loading the current app.</p></div>
+<script>(async()=>{try{for(const r of await navigator.serviceWorker.getRegistrations())await r.unregister();for(const k of await caches.keys())await caches.delete(k);localStorage.clear();localStorage.setItem('budget_app_access_key',%s);location.replace('/?refreshed='+Date.now())}catch(e){document.querySelector('p').textContent='Update failed. Close this page and try again.'}})()</script>`, encodedKey)
+}
 
 // handleApp serves files from dist/, falling back to index.html so the
 // single-page app loads at any path.
@@ -167,6 +185,7 @@ func writeJSONError(w http.ResponseWriter, status int, message string) {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/refresh-app", s.handleRefreshApp)
 	mux.HandleFunc("GET /api/state", s.HandleState)
 	mux.HandleFunc("PUT /api/entries/{id}", s.HandlePutEntry)
 	mux.HandleFunc("DELETE /api/entries/{id}", s.HandleDeleteEntry)
